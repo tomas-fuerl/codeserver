@@ -1,0 +1,9 @@
+dbaeumer.vscode-eslint@3.0.34
+editorconfig.editorconfig@0.18.2
+esbenp.prettier-vscode@12.4.0
+mhutchie.git-graph@1.30.0
+ms-azuretools.vscode-bicep@0.45.15
+ms-dotnettools.vscode-dotnet-runtime@3.1.0
+ms-vscode.powershell@2025.4.0
+openai.chatgpt@26.707.91948
+redhat.vscode-yaml@1.24.0

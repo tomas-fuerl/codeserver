@@ -1,0 +1,10 @@
+# OpenAI Codex
+openai.chatgpt
+
+# TypeScript und JavaScript
+dbaeumer.vscode-eslint
+esbenp.prettier-vscode
+
+# Infrastruktur und Konfiguration
+redhat.vscode-yaml
+EditorConfig.EditorConfig

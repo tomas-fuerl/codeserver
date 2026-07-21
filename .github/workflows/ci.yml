@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Report tool versions
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash --version | sed -n '1p'
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install --yes shellcheck
+          fi
+          shellcheck --version
+          python3 --version
+          docker --version
+          docker compose version
+
+      - name: Validate repository
+        shell: bash
+        run: ./scripts/ci/validate-repository.sh
+
+      - name: Validate Compose contract
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          temp_env="${RUNNER_TEMP}/codeserver-ci.env"
+          rendered="${RUNNER_TEMP}/codeserver-compose.yml"
+          trap 'rm -f -- "$temp_env" "$rendered"' EXIT
+          umask 077
+          tee "$temp_env" >/dev/null <<'PUBLIC_ENV'
+          CODESERVER_IMAGE_REPOSITORY=ghcr.io/example/codeserver
+          CODESERVER_IMAGE_TAG=1.2.3
+          CODESERVER_CONTAINER_NAME=codeserver-ci
+          CODESERVER_BIND_ADDRESS=127.0.0.1
+          CODESERVER_HOST_PORT=18377
+          CODESERVER_CONFIG_PATH=/tmp/codeserver-ci-config
+          PUID=1000
+          PGID=1000
+          TZ=Etc/UTC
+          PROXY_DOMAIN=codeserver.example.com
+          PUBLIC_ENV
+          printf '%s%s\n' 'CODESERVER_SECRET_' 'FILE=/tmp/codeserver-ci-secret' >>"$temp_env"
+          docker compose --env-file "$temp_env" -f compose.yaml config >"$rendered"
+          test "$(docker compose --env-file "$temp_env" -f compose.yaml config --services)" = "code-server"
+          grep -Fq 'image: ghcr.io/example/codeserver:1.2.3' "$rendered"
+          grep -Fq 'host_ip: 127.0.0.1' "$rendered"
+          grep -Fq 'target: /config' "$rendered"
+          grep -Fq 'target: /run/secrets/hashed_password' "$rendered"
+          grep -Fq 'read_only: true' "$rendered"
+          if grep -Eq '^[[:space:]]+(PASSWORD|HASHED_PASSWORD):' "$rendered"; then
+            echo "Plaintext password variable found in rendered Compose configuration." >&2
+            exit 1
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Build image without publishing
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: false
+          provenance: false
+          sbom: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
