@@ -66,6 +66,28 @@ startet ihn sofort wieder. MIG-004 führt diesen Ablauf nicht aus.
   `secrets/hashed_password` mit Modus `0600`.
 
 Die Prüfung verändert keine Backupdatei und gibt den Secret-Inhalt nicht aus.
+Ein expliziter absoluter Archivpfad kann direkt geprüft werden; die
+SHA-256-Sidecardatei muss daneben liegen:
+
+```bash
+"<REPOSITORY_ROOT>/scripts/verify-backup.sh" "<ABSOLUTE_BACKUP_ARCHIVE>"
+```
+
+Ohne Archivargument sucht der Verifier das neueste passende Archiv. Dafür muss
+`CODESERVER_BACKUP_ROOT` explizit auf ein absolutes, normalisiertes,
+vorhandenes Nicht-Symlink-Verzeichnis gesetzt sein:
+
+```bash
+CODESERVER_BACKUP_ROOT="<ABSOLUTE_BACKUP_DIRECTORY>" \
+  "<REPOSITORY_ROOT>/scripts/verify-backup.sh"
+```
+
+Der Verifier verwendet für die Archivauflistung eine eindeutige temporäre Datei
+mit restriktiven Rechten und entfernt sie beim Beenden. Der isolierte
+CI-Regressionstest `scripts/ci/test-backup-verifier.sh` prüft den expliziten
+und automatischen Erfolgsweg, fehlerhafte Prüfsummen, einen falschen
+Secret-Modus sowie die Abwesenheit veröffentlichter Platzhalter. Er verwendet
+ausschließlich synthetische temporäre Testdaten und keine produktiven Archive.
 
 ## Expliziter Restore-Testvertrag
 

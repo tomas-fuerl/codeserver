@@ -243,6 +243,9 @@ fi
 printf 'Running ShellCheck...\n'
 shellcheck "${shell_files[@]}"
 
+printf 'Running backup verifier regression tests...\n'
+"$repo_root/scripts/ci/test-backup-verifier.sh"
+
 printf 'Running static installation and MIG-006 freeze-contract verification...\n'
 "$repo_root/scripts/verify-installation.sh" --static
 
