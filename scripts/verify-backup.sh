@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-readonly BACKUP_DIR="/example/path"
+readonly BACKUP_DIR="${CODESERVER_BACKUP_ROOT:-CHANGE_ME}"
 
 fail() {
   printf '[verify] FEHLER: %s\n' "$*" >&2
@@ -14,6 +14,15 @@ if (( $# == 1 )); then
   ARCHIVE="$1"
   [[ "$ARCHIVE" == /* ]] || fail "Der Archivpfad muss absolut sein."
 else
+  [[ -n "$BACKUP_DIR" && "$BACKUP_DIR" != "CHANGE_ME" ]] ||
+    fail "CODESERVER_BACKUP_ROOT muss für die automatische Archivsuche explizit konfiguriert sein."
+  [[ "$BACKUP_DIR" == /* && "$BACKUP_DIR" != "/" ]] ||
+    fail "CODESERVER_BACKUP_ROOT muss ein absoluter Pfad unterhalb von / sein."
+  [[ "$BACKUP_DIR" != */ && "$BACKUP_DIR" != *"//"* &&
+    "/${BACKUP_DIR#/}/" != *"/./"* && "/${BACKUP_DIR#/}/" != *"/../"* ]] ||
+    fail "CODESERVER_BACKUP_ROOT muss lexikalisch normalisiert und ohne abschließenden Slash angegeben werden."
+  [[ -d "$BACKUP_DIR" && ! -L "$BACKUP_DIR" ]] ||
+    fail "CODESERVER_BACKUP_ROOT fehlt, ist kein reguläres Verzeichnis oder ist ein Symlink: ${BACKUP_DIR}"
   mapfile -t archives < <(find "$BACKUP_DIR" -maxdepth 1 -type f -name 'codeserver-config-????????-??????.tar.gz' -print 2>/dev/null | sort)
   (( ${#archives[@]} > 0 )) || fail "Kein Backup-Archiv in ${BACKUP_DIR} gefunden."
   ARCHIVE="${archives[${#archives[@]} - 1]}"
@@ -30,14 +39,14 @@ if ! (cd "$archive_dir" && sha256sum --check --status "$checksum_name"); then
   fail "SHA-256-Prüfung fehlgeschlagen: ${ARCHIVE}"
 fi
 
-listing="$(mktemp /tmp/codeserver.example.com)"
+listing="$(mktemp /tmp/codeserver-verify-list.XXXXXX)"
 trap 'rm -f -- "$listing"' EXIT
 tar -tzf "$ARCHIVE" >"$listing" || fail "Tar-Archiv ist nicht lesbar: ${ARCHIVE}"
 
 workspace_found=false
 data_found=false
 codex_found=false
-secret_file_count=CHANGE_ME
+secret_file_count=0
 while IFS= read -r entry; do
   [[ "$entry" != /* ]] || fail "Unsicherer absoluter Pfad im Archiv: ${entry}"
   entry="${entry#./}"
