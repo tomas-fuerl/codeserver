@@ -328,3 +328,93 @@ Image-Build selbst und die Toolchain waren dadurch nicht widerlegt.
 - keine privaten Hostpfade in den öffentlichen Nachweis übernommen.
 
 EXT-010 ist vollständig erfüllt und blockiert MIG-006 nicht mehr.
+
+## EXT-012: Offizielle GitHub-CLI- und Basisimageinformationen abrufen
+
+- **Status:** COMPLETED
+- **Zugehöriger Task:** MIG-016
+- **Verantwortlich:** Codex nach ausdrücklicher Netzwerkfreigabe
+- **Warum extern:** Aktuelle stabile Version, offizielle Prüfsummenliste und
+  öffentliche Basisimageinformationen liegen außerhalb des Repositorys.
+- **Voraussetzungen:** Strikt lesender Zugriff ausschließlich auf offizielle
+  GitHub-CLI- und LinuxServer-Quellen, ohne Authentifizierung oder Tokens.
+- **Exakte Schritte:** Aktuelles stabiles Release, `linux_amd64`- und
+  `linux_arm64`-Archive und deren Einträge in der offiziellen
+  SHA-256-Prüfsummenliste abgleichen. Öffentliche LinuxServer-Informationen auf
+  HOME-/`/config`-Verhalten prüfen.
+- **Erwartetes Ergebnis:** Exakte Version, Quellen, Architekturzuordnung und
+  belegbare Persistenzbewertung liegen ohne private Daten vor.
+- **Benötigter Nachweis:** Öffentliche URLs, Version, Archivnamen,
+  Prüfsummenabgleich und redigierter Basisimagebefund; keine Credentials.
+- **Rollback / sichere Abbruchbedingung:** Bei Unklarheit keine Werte oder
+  Pfade raten und MIG-016 bis zur Klärung blockieren.
+
+### Nachweis
+
+- Die offizielle Latest-Release-API meldete am 2026-07-23 `v2.96.0` als
+  veröffentlichtes, unveränderliches, nicht als Prerelease markiertes Release.
+- Offizielle Releasequelle:
+  `https://github.com/cli/cli/releases/tag/v2.96.0`.
+- Offizielle Prüfsummenliste:
+  `https://github.com/cli/cli/releases/download/v2.96.0/gh_2.96.0_checksums.txt`.
+  Ihr von GitHub veröffentlichter Asset-Digest
+  `fc046371efa250e2875208341a786a35a01717d5eebec6903e199a9b8a3f3565`
+  wurde erfolgreich geprüft.
+- `linux_amd64`-Archivchecksumme:
+  `83d5c2ccad5498f58bf6368acb1ab32588cf43ab3a4b1c301bf36328b1c8bd60`.
+- `linux_arm64`-Archivchecksumme:
+  `06f86ec7103d41993b76cd78072f43595c34aaa56506d971d9860e67140bf909`.
+- Die offizielle LinuxServer-Dockerfile-Definition setzt `HOME=/config`; die
+  Basisdefinition setzt kein `XDG_CONFIG_HOME`. Die offizielle `gh`-Dokumentation
+  verwendet ohne Override `$HOME/.config/gh`. Daraus folgt für diesen
+  Imagevertrag der persistente Standardpfad `/config/.config/gh`.
+
+## EXT-013: MIG-016-Runtime und GitHub-CLI-Persistenz prüfen
+
+- **Status:** PENDING
+- **Zugehöriger Task:** MIG-016
+- **Verantwortlich:** Betreiber
+- **Warum extern:** GitHub Actions hat das Image gebaut, aber keinen Container
+  gestartet oder geladen. Codex darf nicht auf Docker-Daemon oder
+  Docker-Socket zugreifen und führt keine interaktive GitHub-Anmeldung aus.
+- **Voraussetzungen:** Lokale MIG-016-Gates und der GitHub-Actions-Build sind
+  erfolgreich; ein nicht veröffentlichtes Testimage und ein isolierter
+  persistenter Test-`/config`-Mount stehen ohne Produktionsdaten bereit.
+- **Exakte Schritte:** Einen echten Testcontainer ohne veröffentlichte Ports,
+  Produktionsmounts oder Credentials starten. Darin ausschließlich vorhandene
+  Imagewerkzeuge prüfen: `command -v gh`, `gh --version`, `node --version`,
+  `pnpm --version`, `pwsh --version`, `codex --version`,
+  `printf 'HOME=%s\n' "$HOME"`,
+  `printf 'XDG_CONFIG_HOME=%s\n' "${XDG_CONFIG_HOME:-}"`,
+  `printf 'GH_CONFIG_DIR=%s\n' "${GH_CONFIG_DIR:-}"` und
+  `printf 'GH_TELEMETRY=%s\n' "${GH_TELEMETRY:-}"` ausführen. HOME und den
+  daraus resultierenden GitHub-CLI-Konfigurationspfad bewerten. Die
+  Repositoryskripte `scripts/verify-developer-tools.sh` und
+  `scripts/verify-toolchain.sh` werden nicht im Container aufgerufen; das
+  Dockerfile übernimmt keine Repositorydateien per `COPY` oder `ADD`.
+  Anschließend die interaktive Anmeldung als getrennten späteren
+  Betreiberschritt ausführen, ohne Credentials oder `hosts.yml`-Inhalte
+  auszugeben. Den Testcontainer mit demselben `/config`-Mount neu starten und
+  mit `gh auth status` bestätigen, dass die Anmeldung persistiert.
+- **Erwartetes Ergebnis:** Die installierten Imagewerkzeuge laufen in einem
+  echten Container mit den erwarteten Versionen; `HOME=/config`, der
+  Konfigurationspfad ist eindeutig persistent, `GH_TELEMETRY=false` und die
+  spätere Anmeldung übersteht einen Containerneustart.
+- **Benötigter Nachweis:** Containerstart und Neustart, Architektur,
+  Werkzeugversionen, HOME, leere oder explizite XDG-/`GH_CONFIG_DIR`-Werte,
+  `GH_TELEMETRY=false`, klassifizierter Konfigurationspfad und erfolgreicher
+  `gh auth status` nach dem Neustart; keine Tokens oder Inhalte von `hosts.yml`.
+- **Rollback / sichere Abbruchbedingung:** Bei Fehler kein Deployment und keine
+  Anmeldung. Produktive Container und persistente Daten unverändert lassen.
+
+### Bereits vorhandener CI-Nachweis
+
+GitHub Actions führte für Commit
+`8d1088f4f53ec25bc4ffe82deeba0edc95f52dd2` den Workflow `CI`, Lauf 5
+(`30039001584`), erfolgreich aus. Im Job `validate-and-build` bestanden
+`Validate repository`, `Validate Compose contract` und
+`Build image without publishing` für `linux/amd64`. Der Build verwendete
+`push: false` und `load: false`; ein Container wurde deshalb weder gestartet
+noch auf Persistenz geprüft. EXT-013 bleibt ausschließlich für die oben
+genannten Runtime-, Konfigurationspfad-, Neustart- und späteren
+Anmeldungsprüfungen `PENDING`.

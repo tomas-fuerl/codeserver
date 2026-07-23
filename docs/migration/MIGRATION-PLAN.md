@@ -71,6 +71,7 @@ abgeleitet oder in diese zurückgeschrieben.
 | MIG-013 | Backup-, Restore- und Laufzeitabnahme | NOT_STARTED | MIG-012, EXT-005, EXT-006 | EXT-007 und lokale Betriebsabnahmen |
 | MIG-014 | Codeserver aus Homelab entfernen | NOT_STARTED | MIG-013, EXT-007 | gegebenenfalls Homelab-PR/Push |
 | MIG-015 | Migration abschließen | NOT_STARTED | MIG-014 | gegebenenfalls finale GitHub-/Betriebsprüfung |
+| MIG-016 | GitHub CLI im code-server-Image bereitstellen | BLOCKED | veröffentlichter Repository-Ausgangsstand | EXT-012 `COMPLETED`, EXT-013 `PENDING` |
 
 `PENDING`-Einträge für spätere Tasks blockieren MIG-001 nicht. Sie werden zum
 Gate, sobald ihr zugehöriger Task erreicht wird.
@@ -436,3 +437,40 @@ Gate, sobald ihr zugehöriger Task erreicht wird.
   verbleibenden Risiken besitzen Eigentümer und Folgemaßnahme.
 - **Rollback / Abbruchstrategie:** Bei offenem Gate MIG-015 nicht abschließen;
   produktive Rollbackbasis bis zur ausdrücklichen späteren Bereinigung erhalten.
+
+## MIG-016: GitHub CLI im code-server-Image bereitstellen
+
+- **Status:** BLOCKED
+- **Ziel:** `gh` exakt gepinnt und offiziell checksum-verifiziert für `amd64`
+  und `arm64` installieren, bestehende Werkzeugprüfungen erweitern und die
+  manuelle persistente Betreiber-Authentifizierung sicher dokumentieren.
+- **Abhängigkeiten:** Veröffentlichter Repository-Ausgangsstand; keine
+  Abhängigkeit von den noch offenen historischen Cutover-Tasks.
+- **Erlaubte Änderungen:** Dockerfile, bestehende Entwickler-, Toolchain- und
+  statische Installationsprüfungen, unmittelbar relevante Dokumentation sowie
+  MIG-016-Task- und External-Action-Nachweise.
+- **Erwartete Artefakte:** Verifizierte `gh`-Installation, erweiterte Gates,
+  deaktivierte GitHub-CLI-Telemetrie, korrigierte Node.js-Beschriftung und
+  Betreiberanleitung ohne Credentials.
+- **Erforderliche Prüfungen:** Repositoryvalidator, Bashsyntax, ShellCheck,
+  `git diff --check`, CI-Build für `linux/amd64` und anschließend reale
+  Container-, Werkzeug- und Persistenz-Smoke-Tests.
+- **Mögliche externe Aktionen:** EXT-012 für offizielle Release-/Basisdaten;
+  EXT-013 für Testcontainer, Laufzeit- und Persistenzabnahme.
+- **Abschlusskriterien:** Lokaler Scope vollständig geprüft, keine Credentials
+  aufgenommen und externe Nachweise wahrheitsgemäß dokumentiert.
+- **Rollback / Abbruchstrategie:** Keine Version, Prüfsumme oder
+  Persistenzannahme raten; Produktivsystem und bestehende Images unverändert
+  lassen.
+- **MIG-016-Ergebnis:** Lokale Implementierung und daemonfreie Gates sind
+  erfolgreich. `gh 2.96.0` ist für `amd64` und `arm64` offiziell
+  checksum-verifiziert; Entwickler-, Toolchain- und statische Gates wurden
+  erweitert. GitHub Actions Lauf 5 hat Repositoryvalidator,
+  Compose-Validierung und den nicht veröffentlichten `linux/amd64`-Image-Build
+  für Commit `8d1088f4f53ec25bc4ffe82deeba0edc95f52dd2` erfolgreich ausgeführt.
+  EXT-013 blockiert ausschließlich Testcontainer, Runtimeprüfung,
+  Konfigurationspfad, Neustartpersistenz und spätere interaktive Anmeldung.
+  Das ursprüngliche Commit-/Push-Verbot wurde durch ausdrückliche
+  Eigentümerfreigabe ausschließlich für `feat/add-github-cli` und dessen
+  Draft-PR-Pflege aufgehoben; Merge, Release, Tag und Deployment bleiben
+  ausgeschlossen.

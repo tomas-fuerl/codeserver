@@ -49,6 +49,33 @@ Der Hash darf insbesondere nicht über `PASSWORD`, `HASHED_PASSWORD`,
 `SUDO_PASSWORD` oder `FILE__PASSWORD` als Environment-Variable in den
 Container gelangen.
 
+## GitHub-CLI-Authentifizierung und Telemetrie
+
+`gh` ist ein Imagewerkzeug und benötigt keine öffentliche Compose-Variable.
+Die Anmeldung ist eine einmalige interaktive Betreiberaktion nach Deployment:
+
+```bash
+gh auth login --hostname github.com --git-protocol https --web
+gh auth status
+```
+
+Die offizielle LinuxServer-Basis setzt `HOME=/config`; die GitHub CLI verwendet
+ohne abweichende XDG- oder `GH_CONFIG_DIR`-Vorgabe standardmäßig
+`$HOME/.config/gh`, hier also `/config/.config/gh`. Der vorhandene `/config`-
+Bind-Mount persistiert diesen lokalen Zustand. Vor der Anmeldung werden HOME
+und das tatsächliche `gh`-Verhalten im laufenden Container wie in
+[Synology und Portainer](SYNOLOGY-PORTAINER.md) geprüft. GitHub-Token,
+`hosts.yml` und andere Authentifizierungsdaten sind keine Portainer-Variable,
+kein öffentlicher Compose-Wert und niemals Repository- oder Imageinhalt.
+
+Das Image setzt reproduzierbar `GH_TELEMETRY=false`; die pseudonyme
+GitHub-CLI-Telemetrie ist damit standardmäßig deaktiviert. Der Wert ist eine
+öffentliche Verhaltenssteuerung und kein Secret. Er wird nicht als zusätzliche
+Compose-Variable benötigt. Eine lokale Abweichung darf nur durch eine
+ausdrückliche Betreiberentscheidung erfolgen. GitHub-CLI-Erweiterungen können
+eigene Telemetrie implementieren und müssen unabhängig vom `gh`-Default vor
+Installation oder Aktivierung separat bewertet werden.
+
 ## Vertrag zwischen Compose- und Skriptvariablen
 
 | Portainer-/Compose-Wert | Explizite Skriptvariable | Klasse | Regel |

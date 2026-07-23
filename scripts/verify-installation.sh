@@ -240,17 +240,38 @@ for blocked_reference in (
     require(blocked_reference.lower() not in dockerfile.lower(), "Dockerfile enthält eine private oder Beispielreferenz")
 for required_reference in (
     "ARG NODE_VERSION=24.18.0",
+    "ARG GH_VERSION=2.96.0",
+    "GH_CHECKSUMS_SHA256=\"fc046371efa250e2875208341a786a35a01717d5eebec6903e199a9b8a3f3565\"",
     "ARG PNPM_VERSION=10.13.1",
     "ARG POWERSHELL_VERSION=7.6.3",
     "ARG CODEX_VERSION=\"0.144.5\"",
     "https://nodejs.org/dist/v${NODE_VERSION}/${NODE_ARCHIVE}",
     "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt",
     "https://github.com/PowerShell/PowerShell/releases/download/v${POWERSHELL_VERSION}/${PWSH_ARCHIVE}",
+    "amd64) GH_ARCH=\"amd64\" ;;",
+    "arm64) GH_ARCH=\"arm64\" ;;",
+    "GH_ARCHIVE=\"gh_${GH_VERSION}_linux_${GH_ARCH}.tar.gz\"",
+    "https://github.com/cli/cli/releases/download/v${GH_VERSION}/${GH_ARCHIVE}",
+    "https://github.com/cli/cli/releases/download/v${GH_VERSION}/${GH_CHECKSUMS}",
+    "/opt/github-cli/${GH_VERSION}/bin/gh",
+    "command -v gh",
+    "gh --version",
     "pnpm@${PNPM_VERSION}",
     "@openai/codex@${CODEX_VERSION}",
 ):
     require(required_reference in dockerfile, "Dockerfile-Werkzeugversion oder offizielle Quelle fehlt")
-require("sha256sum --check --strict" in dockerfile, "Dockerfile-Prüfsummenprüfung fehlt")
+require(
+    dockerfile.count("ENV GH_TELEMETRY=false") == 1,
+    "GitHub-CLI-Telemetrie muss im Image exakt einmal deaktiviert sein",
+)
+require(
+    dockerfile.count("sha256sum --check --strict") >= 4,
+    "Dockerfile-Prüfsummenprüfungen fehlen",
+)
+require(
+    re.search(r"^\s*gh\s*\\?$", dockerfile, re.MULTILINE) is None,
+    "GitHub CLI darf nicht über apt installiert werden",
+)
 
 publication_audit = root / "scripts/security/publication-audit.sh"
 require(

@@ -30,9 +30,12 @@ in [CONFIGURATION.md](CONFIGURATION.md).
 ## Imagezustand
 
 Das Dockerfile basiert auf `lscr.io/linuxserver/code-server:4.128.0-ls351`
-mit vollständig gepinntem SHA-256-Manifest-Digest. Downloadquellen für Node und
-PowerShell sowie die npm-Pakete für pnpm und Codex sind öffentliche offizielle
-Upstreams; das OCI-Source-Label verweist auf dieses öffentliche Repository.
+mit vollständig gepinntem SHA-256-Manifest-Digest. GitHub CLI, Node und
+PowerShell werden aus exakt gepinnten offiziellen Releases installiert und
+gegen offizielle SHA-256-Werte geprüft; pnpm und Codex sind exakt gepinnte
+öffentliche npm-Pakete. `GH_TELEMETRY=false` deaktiviert die pseudonyme
+GitHub-CLI-Telemetrie als reproduzierbaren Image-Default. Das OCI-Source-Label
+verweist auf dieses Repository.
 
 Das produktive Imageformat ist
 `ghcr.io/tomas-fuerl/codeserver:<VERSION>`. `<VERSION>` bezeichnet später ein
@@ -62,6 +65,8 @@ Cutover deaktiviert. Einzelheiten stehen in
 Der Synology-Host hält außerhalb von Git und Image:
 
 - den persistenten `/config`-Quellpfad einschließlich Workspace;
+- die lokal vom Betreiber erzeugte GitHub-CLI-Authentifizierung unter
+  `/config/.config/gh`;
 - die einzelne lokale Datei `hashed_password`;
 - Backupverzeichnis und Restore-Testbasis;
 - Dateieigentümer und Rechte;
@@ -71,6 +76,15 @@ Der Synology-Host hält außerhalb von Git und Image:
 Ein Containerwechsel darf Persistenz, Secret, Backups oder Restore-Testdaten
 nicht löschen. Backup- und Restorepfade werden nicht in den Container
 gemountet.
+
+Die GitHub CLI gehört zum reproduzierbaren Image. Ihre interaktive Anmeldung
+und die dabei entstehenden Credentials gehören dagegen zum lokalen
+persistenten `/config`-Zustand. Token und `hosts.yml` sind weder Image- noch
+Repository- oder öffentlicher Compose-Zustand. Die LinuxServer-Basis setzt
+`HOME=/config`; ein zusätzliches `GH_CONFIG_DIR` ist deshalb im aktuellen
+Vertrag nicht erforderlich. `GH_TELEMETRY=false` ist kein Secret; eine lokale
+Abweichung benötigt eine ausdrückliche Betreiberentscheidung. Erweiterungen
+der GitHub CLI können eigene Telemetrie besitzen und werden separat bewertet.
 
 ## Netzwerk- und Secretgrenze
 

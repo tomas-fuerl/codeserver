@@ -12,7 +12,8 @@
   Docker-Buildkontext.
 - `AGENTS.md`: verbindliche Regeln für Repository-Agenten.
 - `CONTRIBUTING.md`: öffentlicher Beitrags- und Reviewablauf.
-- `Dockerfile`: reproduzierbare Imagequelle.
+- `Dockerfile`: reproduzierbare Imagequelle mit gepinnter, offiziell
+  checksum-verifizierter GitHub CLI für `amd64` und `arm64`.
 - `LICENSE`: Lizenz des Repositorys.
 - `README.md`: öffentliche Einstiegseite und Dokumentationsindex.
 - `SECURITY.md`: Meldeweg und Supply-Chain-Sicherheitsvertrag.
@@ -66,10 +67,11 @@ keinen Workflow aus.
 - `scripts/sync-extensions.sh` installiert ausschließlich die gepinnten Einträge der
   Rootdatei `extensions.lock.txt`; ein optionaler Override muss absolut sein.
 - `scripts/verify-backup.sh` prüft Archiv, Prüfsumme und Pflichtinhalte.
-- `scripts/verify-developer-tools.sh` prüft Entwicklungswerkzeuge.
+- `scripts/verify-developer-tools.sh` prüft Entwicklungswerkzeuge einschließlich
+  `gh` und gibt deren Versionen aus.
 - `scripts/verify-installation.sh` verwendet standardmäßig den daemonfreien
   Modus `--static`; `--runtime` ist nur eine ausdrückliche Betreiberprüfung.
-- `scripts/verify-toolchain.sh` prüft die Image-Toolchain.
+- `scripts/verify-toolchain.sh` prüft die gepinnten Imagewerkzeuge einschließlich `gh`.
 - `scripts/ci/validate-repository.sh` bündelt die lokalen statischen Gates.
 - `scripts/ci/validate-actions.sh` prüft Trigger, Pins, Berechtigungen und
   Publish-Vertrag ohne YAML-Ausführung.
@@ -80,7 +82,8 @@ keinen Workflow aus.
 
 ## Nicht versionierter lokaler Zustand
 
-Produktive Environment-Dateien, Secret-Dateien, persistente Konfiguration,
+Produktive Environment-Dateien, Secret-Dateien, GitHub-Token und
+Authentifizierungsdateien wie `hosts.yml`, persistente Konfiguration,
 Workspaces, Anwendungsdaten, Backups, Restore-Testdaten, Logs sowie Portainer-,
 DSM-, Reverse-Proxy- und Firewallkonfiguration liegen ausdrücklich nicht im
 Repository.
