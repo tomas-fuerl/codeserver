@@ -261,6 +261,10 @@ for required_reference in (
 ):
     require(required_reference in dockerfile, "Dockerfile-Werkzeugversion oder offizielle Quelle fehlt")
 require(
+    dockerfile.count("ENV GH_TELEMETRY=false") == 1,
+    "GitHub-CLI-Telemetrie muss im Image exakt einmal deaktiviert sein",
+)
+require(
     dockerfile.count("sha256sum --check --strict") >= 4,
     "Dockerfile-Prüfsummenprüfungen fehlen",
 )

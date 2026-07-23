@@ -178,18 +178,35 @@ Konfigurationspfad ist deshalb `/config/.config/gh`.
 Vor der Anmeldung führt der Betreiber im laufenden Container aus:
 
 ```bash
+command -v gh
+gh --version
+node --version
+pnpm --version
+pwsh --version
+codex --version
 printf 'HOME=%s\n' "$HOME"
 printf 'XDG_CONFIG_HOME=%s\n' "${XDG_CONFIG_HOME:-}"
 printf 'GH_CONFIG_DIR=%s\n' "${GH_CONFIG_DIR:-}"
-gh --version
+printf 'GH_TELEMETRY=%s\n' "${GH_TELEMETRY:-}"
 gh config get --host github.com git_protocol
 ```
 
-`HOME` muss `/config` ausgeben. Falls der reale Container davon abweicht oder
-eine lokal gesetzte XDG-/`GH_CONFIG_DIR`-Variable den Pfad verändert, wird die
-Anmeldung abgebrochen und der Persistenzvertrag separat reviewt. Es wird kein
-Pfad geraten. Beim dokumentierten Standard ist kein zusätzliches
+Alle Befehle müssen erfolgreich sein, `HOME` muss `/config` und
+`GH_TELEMETRY` muss `false` ausgeben. Falls der reale Container davon abweicht
+oder eine lokal gesetzte XDG-/`GH_CONFIG_DIR`-Variable den Pfad verändert,
+wird die Anmeldung abgebrochen und der Persistenzvertrag separat reviewt. Es
+wird kein Pfad geraten. Beim dokumentierten Standard ist kein zusätzliches
 `GH_CONFIG_DIR` erforderlich.
+
+Die Repositoryskripte `scripts/verify-developer-tools.sh` und
+`scripts/verify-toolchain.sh` werden aus dem ausgecheckten Repository
+ausgeführt. Sie sind keine Containerdateien, weil das Dockerfile keine
+Repositorydateien per `COPY` oder `ADD` in das Image übernimmt.
+
+`GH_TELEMETRY=false` deaktiviert die pseudonyme GitHub-CLI-Telemetrie im Image
+standardmäßig und ist kein Secret. Eine lokale Abweichung benötigt eine
+ausdrückliche Betreiberentscheidung. GitHub-CLI-Erweiterungen können eigene
+Telemetrie besitzen und müssen separat bewertet werden.
 
 Danach startet der Betreiber genau einmal den Web-Login und folgt dem
 interaktiven Browserablauf:
@@ -198,6 +215,12 @@ interaktiven Browserablauf:
 gh auth login --hostname github.com --git-protocol https --web
 gh auth status
 ```
+
+Nach der Anmeldung wird ausschließlich die Existenz der erwarteten
+Authentifizierungsdatei geprüft, niemals ihr Inhalt. Anschließend wird der
+Testcontainer mit demselben `/config`-Mount neu gestartet und `gh auth status`
+erneut ausgeführt. Nur wenn die Anmeldung danach weiter besteht, ist die
+Authentifizierungspersistenz nachgewiesen.
 
 Die Anmeldung darf weder im Image-Build noch in CI, Compose oder einem
 Repositoryskript automatisiert werden. GitHub-Token, Ausgaben mit Credentials
@@ -229,14 +252,17 @@ Nach einem späteren Deployment werden als `EXTERNAL OPERATOR ACTION` geprüft:
 - Port `8443/tcp` ist ausschließlich an Loopback veröffentlicht;
 - Login über den HTTPS-Reverse-Proxy;
 - persistenter Workspace nach einer kontrollierten Neuerstellung;
-- Terminal und benötigte Toolchain einschließlich `gh --version` und
-  `gh auth status` ohne Credential-Ausgabe;
+- Terminal und tatsächlich installierte Imagewerkzeuge mit den in Abschnitt 8
+  genannten Versionsbefehlen;
+- GitHub-CLI-Konfigurationspfad sowie Anmeldung über einen Containerneustart,
+  jeweils ohne Credential-Ausgabe;
 - `/config`-Mount und read-only Secret-Mount;
 - Logs auf Fehler, jedoch ohne Secret-Inhalte oder Environment-Werte
   auszugeben.
 
-Die Runtimeprüfung wird nur ausdrücklich mit
-`scripts/verify-installation.sh --runtime` gestartet.
+Die Repositoryprüfung `scripts/verify-installation.sh --runtime` wird nur aus
+einem ausgecheckten Repository und mit ausdrücklich freigegebenem Dockerzugriff
+gestartet; sie wird nicht innerhalb des Images ausgeführt.
 
 ## 11. Rollback
 

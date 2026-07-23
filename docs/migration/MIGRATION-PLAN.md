@@ -450,12 +450,13 @@ Gate, sobald ihr zugehöriger Task erreicht wird.
   statische Installationsprüfungen, unmittelbar relevante Dokumentation sowie
   MIG-016-Task- und External-Action-Nachweise.
 - **Erwartete Artefakte:** Verifizierte `gh`-Installation, erweiterte Gates,
-  korrigierte Node.js-Beschriftung und Betreiberanleitung ohne Credentials.
+  deaktivierte GitHub-CLI-Telemetrie, korrigierte Node.js-Beschriftung und
+  Betreiberanleitung ohne Credentials.
 - **Erforderliche Prüfungen:** Repositoryvalidator, Bashsyntax, ShellCheck,
-  `git diff --check` und nach Betreiber-Build die Werkzeug- und
-  Persistenz-Smoke-Tests.
+  `git diff --check`, CI-Build für `linux/amd64` und anschließend reale
+  Container-, Werkzeug- und Persistenz-Smoke-Tests.
 - **Mögliche externe Aktionen:** EXT-012 für offizielle Release-/Basisdaten;
-  EXT-013 für Betreiber-Build und Laufzeitabnahme.
+  EXT-013 für Testcontainer, Laufzeit- und Persistenzabnahme.
 - **Abschlusskriterien:** Lokaler Scope vollständig geprüft, keine Credentials
   aufgenommen und externe Nachweise wahrheitsgemäß dokumentiert.
 - **Rollback / Abbruchstrategie:** Keine Version, Prüfsumme oder
@@ -464,5 +465,12 @@ Gate, sobald ihr zugehöriger Task erreicht wird.
 - **MIG-016-Ergebnis:** Lokale Implementierung und daemonfreie Gates sind
   erfolgreich. `gh 2.96.0` ist für `amd64` und `arm64` offiziell
   checksum-verifiziert; Entwickler-, Toolchain- und statische Gates wurden
-  erweitert. EXT-013 blockiert ausschließlich den realen Image-Build und die
-  abschließende Laufzeit-/Persistenzbestätigung.
+  erweitert. GitHub Actions Lauf 5 hat Repositoryvalidator,
+  Compose-Validierung und den nicht veröffentlichten `linux/amd64`-Image-Build
+  für Commit `8d1088f4f53ec25bc4ffe82deeba0edc95f52dd2` erfolgreich ausgeführt.
+  EXT-013 blockiert ausschließlich Testcontainer, Runtimeprüfung,
+  Konfigurationspfad, Neustartpersistenz und spätere interaktive Anmeldung.
+  Das ursprüngliche Commit-/Push-Verbot wurde durch ausdrückliche
+  Eigentümerfreigabe ausschließlich für `feat/add-github-cli` und dessen
+  Draft-PR-Pflege aufgehoben; Merge, Release, Tag und Deployment bleiben
+  ausgeschlossen.

@@ -63,6 +63,12 @@ Das Image enthält die im `Dockerfile` exakt gepinnte GitHub CLI `gh`. Die
 GitHub-Anmeldung gehört nicht zum Image-Build: Sie wird nach Deployment einmal
 interaktiv vom Betreiber im Terminal des laufenden code-server ausgeführt.
 
+Der reproduzierbare Imagevertrag setzt `GH_TELEMETRY=false` und deaktiviert
+damit die pseudonyme GitHub-CLI-Telemetrie standardmäßig. Dieser öffentliche
+Steuerwert ist kein Secret. Eine lokale Abweichung erfordert eine ausdrückliche
+Betreiberentscheidung. GitHub-CLI-Erweiterungen können unabhängig davon eigene
+Telemetrie besitzen und müssen vor ihrer Nutzung separat bewertet werden.
+
 Die geprüfte LinuxServer-Basis setzt `HOME=/config`. Ohne abweichendes
 `XDG_CONFIG_HOME` oder `GH_CONFIG_DIR` verwendet `gh` daher den persistenten
 Pfad `/config/.config/gh`. Vor der Anmeldung prüft der Betreiber den realen

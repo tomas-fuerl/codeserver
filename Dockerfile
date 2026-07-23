@@ -8,6 +8,8 @@ ARG PNPM_VERSION=10.13.1
 ARG POWERSHELL_VERSION=7.6.3
 ARG CODEX_VERSION="0.144.5"
 
+ENV GH_TELEMETRY=false
+
 USER root
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]

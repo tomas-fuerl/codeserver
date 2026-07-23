@@ -369,29 +369,52 @@ EXT-010 ist vollständig erfüllt und blockiert MIG-006 nicht mehr.
   verwendet ohne Override `$HOME/.config/gh`. Daraus folgt für diesen
   Imagevertrag der persistente Standardpfad `/config/.config/gh`.
 
-## EXT-013: MIG-016-Image bauen und GitHub-CLI-Persistenz prüfen
+## EXT-013: MIG-016-Runtime und GitHub-CLI-Persistenz prüfen
 
 - **Status:** PENDING
 - **Zugehöriger Task:** MIG-016
 - **Verantwortlich:** Betreiber
-- **Warum extern:** Codex darf nicht auf Docker-Daemon oder Docker-Socket
-  zugreifen; Build und Laufzeitpersistenz sind lokal nicht simulierbar.
-- **Voraussetzungen:** Lokale MIG-016-Gates sind erfolgreich; der Build
-  verwendet keine Secrets.
-- **Exakte Schritte:** Image für die freigegebene Zielarchitektur ohne Ports,
-  Produktionsmounts oder Credentials bauen. Im Testcontainer `gh --version`,
-  `./scripts/verify-developer-tools.sh`, `./scripts/verify-toolchain.sh`,
-  `printf 'HOME=%s\n' "$HOME"` und
-  `gh config get --host github.com git_protocol` ausführen. Prüfen, ob die
-  GitHub-CLI-Konfiguration ohne zusätzliche Variable im persistenten
-  `/config`-Mount liegt; andernfalls vor Authentifizierung einen separat
-  reviewten `GH_CONFIG_DIR` innerhalb des persistenten Bereichs definieren.
-  Keine Anmeldung und keine Authentifizierungsdateiinhalte für diesen
-  technischen Smoke-Test ausgeben.
-- **Erwartetes Ergebnis:** Build und Werkzeugprüfungen bestehen; HOME und
-  tatsächliches Konfigurationsverhalten erlauben eine Persistenzentscheidung.
-- **Benötigter Nachweis:** Exitstatus, Architektur, `gh`-Version,
-  Werkzeugprüfergebnisse, HOME und klassifizierter Persistenzbefund ohne
-  Tokens oder Inhalte von `hosts.yml`.
+- **Warum extern:** GitHub Actions hat das Image gebaut, aber keinen Container
+  gestartet oder geladen. Codex darf nicht auf Docker-Daemon oder
+  Docker-Socket zugreifen und führt keine interaktive GitHub-Anmeldung aus.
+- **Voraussetzungen:** Lokale MIG-016-Gates und der GitHub-Actions-Build sind
+  erfolgreich; ein nicht veröffentlichtes Testimage und ein isolierter
+  persistenter Test-`/config`-Mount stehen ohne Produktionsdaten bereit.
+- **Exakte Schritte:** Einen echten Testcontainer ohne veröffentlichte Ports,
+  Produktionsmounts oder Credentials starten. Darin ausschließlich vorhandene
+  Imagewerkzeuge prüfen: `command -v gh`, `gh --version`, `node --version`,
+  `pnpm --version`, `pwsh --version`, `codex --version`,
+  `printf 'HOME=%s\n' "$HOME"`,
+  `printf 'XDG_CONFIG_HOME=%s\n' "${XDG_CONFIG_HOME:-}"`,
+  `printf 'GH_CONFIG_DIR=%s\n' "${GH_CONFIG_DIR:-}"` und
+  `printf 'GH_TELEMETRY=%s\n' "${GH_TELEMETRY:-}"` ausführen. HOME und den
+  daraus resultierenden GitHub-CLI-Konfigurationspfad bewerten. Die
+  Repositoryskripte `scripts/verify-developer-tools.sh` und
+  `scripts/verify-toolchain.sh` werden nicht im Container aufgerufen; das
+  Dockerfile übernimmt keine Repositorydateien per `COPY` oder `ADD`.
+  Anschließend die interaktive Anmeldung als getrennten späteren
+  Betreiberschritt ausführen, ohne Credentials oder `hosts.yml`-Inhalte
+  auszugeben. Den Testcontainer mit demselben `/config`-Mount neu starten und
+  mit `gh auth status` bestätigen, dass die Anmeldung persistiert.
+- **Erwartetes Ergebnis:** Die installierten Imagewerkzeuge laufen in einem
+  echten Container mit den erwarteten Versionen; `HOME=/config`, der
+  Konfigurationspfad ist eindeutig persistent, `GH_TELEMETRY=false` und die
+  spätere Anmeldung übersteht einen Containerneustart.
+- **Benötigter Nachweis:** Containerstart und Neustart, Architektur,
+  Werkzeugversionen, HOME, leere oder explizite XDG-/`GH_CONFIG_DIR`-Werte,
+  `GH_TELEMETRY=false`, klassifizierter Konfigurationspfad und erfolgreicher
+  `gh auth status` nach dem Neustart; keine Tokens oder Inhalte von `hosts.yml`.
 - **Rollback / sichere Abbruchbedingung:** Bei Fehler kein Deployment und keine
   Anmeldung. Produktive Container und persistente Daten unverändert lassen.
+
+### Bereits vorhandener CI-Nachweis
+
+GitHub Actions führte für Commit
+`8d1088f4f53ec25bc4ffe82deeba0edc95f52dd2` den Workflow `CI`, Lauf 5
+(`30039001584`), erfolgreich aus. Im Job `validate-and-build` bestanden
+`Validate repository`, `Validate Compose contract` und
+`Build image without publishing` für `linux/amd64`. Der Build verwendete
+`push: false` und `load: false`; ein Container wurde deshalb weder gestartet
+noch auf Persistenz geprüft. EXT-013 bleibt ausschließlich für die oben
+genannten Runtime-, Konfigurationspfad-, Neustart- und späteren
+Anmeldungsprüfungen `PENDING`.
