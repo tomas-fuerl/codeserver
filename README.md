@@ -57,6 +57,30 @@ Die Passwort-Authentifizierung wird ausschließlich über eine lokale,
 read-only eingebundene Datei bereitgestellt. Ein Passwort-Hash wird nie als
 Environment-Variable oder Repositoryinhalt gepflegt.
 
+## GitHub CLI und Betreiberanmeldung
+
+Das Image enthält die im `Dockerfile` exakt gepinnte GitHub CLI `gh`. Die
+GitHub-Anmeldung gehört nicht zum Image-Build: Sie wird nach Deployment einmal
+interaktiv vom Betreiber im Terminal des laufenden code-server ausgeführt.
+
+Die geprüfte LinuxServer-Basis setzt `HOME=/config`. Ohne abweichendes
+`XDG_CONFIG_HOME` oder `GH_CONFIG_DIR` verwendet `gh` daher den persistenten
+Pfad `/config/.config/gh`. Vor der Anmeldung prüft der Betreiber den realen
+Containerwert und das Git-Protokoll wie in der
+[Synology- und Portainer-Anleitung](docs/SYNOLOGY-PORTAINER.md) beschrieben.
+Ein zusätzliches `GH_CONFIG_DIR` ist für diesen Imagevertrag nicht vorgesehen.
+
+```bash
+gh auth login --hostname github.com --git-protocol https --web
+gh auth status
+```
+
+GitHub-Token, `gh`-Authentifizierungsdateien wie `hosts.yml` und sonstige
+Credentials sind ausschließlich lokaler, persistenter Betreiberzustand. Sie
+werden nie in das Image eingebaut, in Git eingecheckt, als öffentliche
+Compose-Werte gepflegt oder in README, Issues, Pull Requests und Logs
+ausgegeben.
+
 ## Schnellstart für Betreiber
 
 1. [Konfigurationsvertrag](docs/CONFIGURATION.md) lesen und lokale Werte

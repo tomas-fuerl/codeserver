@@ -166,7 +166,48 @@ Der Secret-Inhalt wird dabei nicht gelesen oder ausgegeben.
 Bis MIG-010 existiert kein freigegebenes Image; vorher muss der Vorgang sicher
 abgebrochen werden.
 
-## 8. Reverse Proxy
+## 8. GitHub CLI einmalig anmelden
+
+Die GitHub CLI ist im Image enthalten; die Authentifizierung ist ausschließlich
+eine interaktive Betreiberaktion im Terminal des bereits deployten
+code-server. Die geprüfte LinuxServer-Basis setzt `HOME=/config`, und die
+offizielle GitHub CLI verwendet ohne abweichende XDG- oder
+`GH_CONFIG_DIR`-Vorgabe `$HOME/.config/gh`. Der erwartete persistente
+Konfigurationspfad ist deshalb `/config/.config/gh`.
+
+Vor der Anmeldung führt der Betreiber im laufenden Container aus:
+
+```bash
+printf 'HOME=%s\n' "$HOME"
+printf 'XDG_CONFIG_HOME=%s\n' "${XDG_CONFIG_HOME:-}"
+printf 'GH_CONFIG_DIR=%s\n' "${GH_CONFIG_DIR:-}"
+gh --version
+gh config get --host github.com git_protocol
+```
+
+`HOME` muss `/config` ausgeben. Falls der reale Container davon abweicht oder
+eine lokal gesetzte XDG-/`GH_CONFIG_DIR`-Variable den Pfad verändert, wird die
+Anmeldung abgebrochen und der Persistenzvertrag separat reviewt. Es wird kein
+Pfad geraten. Beim dokumentierten Standard ist kein zusätzliches
+`GH_CONFIG_DIR` erforderlich.
+
+Danach startet der Betreiber genau einmal den Web-Login und folgt dem
+interaktiven Browserablauf:
+
+```bash
+gh auth login --hostname github.com --git-protocol https --web
+gh auth status
+```
+
+Die Anmeldung darf weder im Image-Build noch in CI, Compose oder einem
+Repositoryskript automatisiert werden. GitHub-Token, Ausgaben mit Credentials
+und Dateien wie `/config/.config/gh/hosts.yml` werden nicht in das Image
+eingebaut, nicht in Git eingecheckt, nicht als öffentliche Compose-Werte
+gepflegt und nicht in README, Issues, Pull Requests oder Logs kopiert. Der
+gesamte GitHub-CLI-Konfigurationsbereich bleibt lokaler, sensibler
+Betreiberzustand im persistenten `/config`-Mount.
+
+## 9. Reverse Proxy
 
 Der öffentliche Vertrag lautet ausschließlich:
 
@@ -179,7 +220,7 @@ DSM hält Domain, Zertifikat, WebSocket- und Firewallkonfiguration lokal.
 Direkter externer Zugriff auf den veröffentlichten Containerport ist nicht Teil
 des Vertrags.
 
-## 9. Verifikation
+## 10. Verifikation
 
 Nach einem späteren Deployment werden als `EXTERNAL OPERATOR ACTION` geprüft:
 
@@ -188,7 +229,8 @@ Nach einem späteren Deployment werden als `EXTERNAL OPERATOR ACTION` geprüft:
 - Port `8443/tcp` ist ausschließlich an Loopback veröffentlicht;
 - Login über den HTTPS-Reverse-Proxy;
 - persistenter Workspace nach einer kontrollierten Neuerstellung;
-- Terminal und benötigte Toolchain;
+- Terminal und benötigte Toolchain einschließlich `gh --version` und
+  `gh auth status` ohne Credential-Ausgabe;
 - `/config`-Mount und read-only Secret-Mount;
 - Logs auf Fehler, jedoch ohne Secret-Inhalte oder Environment-Werte
   auszugeben.
@@ -196,7 +238,7 @@ Nach einem späteren Deployment werden als `EXTERNAL OPERATOR ACTION` geprüft:
 Die Runtimeprüfung wird nur ausdrücklich mit
 `scripts/verify-installation.sh --runtime` gestartet.
 
-## 10. Rollback
+## 11. Rollback
 
 Bei einem fehlgeschlagenen späteren Cutover:
 

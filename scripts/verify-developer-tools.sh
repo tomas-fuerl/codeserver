@@ -10,6 +10,7 @@ required_commands=(
   g++
   gcc
   git
+  gh
   jq
   lsof
   make
@@ -54,7 +55,7 @@ fi
 echo "Versionsinformationen:"
 echo
 
-printf 'codeserver.example.com:      '
+printf 'Node.js:      '
 node --version
 
 printf 'npm:          '
@@ -71,18 +72,20 @@ pwsh --version
 
 printf 'Git:          '
 git --version
+printf 'GitHub CLI:   '
+gh --version | awk 'NR == 1 { print $3; exit }'
 
 printf 'Python:       '
 python3 --version
 
 printf 'ripgrep:      '
-rg --version | head -n 1
+rg --version | sed -n '1p'
 
 printf 'fd:           '
 fd --version
 
 printf 'rsync:        '
-rsync --version | head -n 1
+rsync --version | sed -n '1p'
 
 printf 'ShellCheck:   '
 shellcheck --version \

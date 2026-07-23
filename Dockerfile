@@ -3,6 +3,7 @@ LABEL org.opencontainers.image.source="https://github.com/tomas-fuerl/codeserver
 
 ARG TARGETARCH
 ARG NODE_VERSION=24.18.0
+ARG GH_VERSION=2.96.0
 ARG PNPM_VERSION=10.13.1
 ARG POWERSHELL_VERSION=7.6.3
 ARG CODEX_VERSION="0.144.5"
@@ -68,6 +69,40 @@ RUN BUILD_ARCH="${TARGETARCH:-$(dpkg --print-architecture)}" \
         --directory /usr/local --strip-components=1 \
     && rm -f "/tmp/${NODE_ARCHIVE}" /tmp/SHASUMS256.txt
 
+# Installiert die GitHub CLI aus dem offiziellen Releasearchiv und prüft
+# Prüfsummenliste sowie Archiv vor der Installation strikt.
+RUN BUILD_ARCH="${TARGETARCH:-$(dpkg --print-architecture)}" \
+    && case "${BUILD_ARCH}" in \
+        amd64) GH_ARCH="amd64" ;; \
+        arm64) GH_ARCH="arm64" ;; \
+        *) echo "Nicht unterstützte Architektur: ${BUILD_ARCH}" >&2; exit 1 ;; \
+    esac \
+    && GH_ARCHIVE="gh_${GH_VERSION}_linux_${GH_ARCH}.tar.gz" \
+    && GH_CHECKSUMS="gh_${GH_VERSION}_checksums.txt" \
+    && GH_CHECKSUMS_SHA256="fc046371efa250e2875208341a786a35a01717d5eebec6903e199a9b8a3f3565" \
+    && curl --fail --show-error --location --retry 3 \
+        --output "/tmp/${GH_ARCHIVE}" \
+        "https://github.com/cli/cli/releases/download/v${GH_VERSION}/${GH_ARCHIVE}" \
+    && curl --fail --show-error --location --retry 3 \
+        --output "/tmp/${GH_CHECKSUMS}" \
+        "https://github.com/cli/cli/releases/download/v${GH_VERSION}/${GH_CHECKSUMS}" \
+    && echo "${GH_CHECKSUMS_SHA256}  /tmp/${GH_CHECKSUMS}" \
+        | sha256sum --check --strict - \
+    && awk -v archive="${GH_ARCHIVE}" \
+        '$2 == archive && NF == 2 && length($1) == 64 && $1 !~ /[^0-9a-f]/ { count += 1; checksum = $1 } END { if (count != 1) exit 1; print checksum "  /tmp/" archive }' \
+        "/tmp/${GH_CHECKSUMS}" \
+        | sha256sum --check --strict - \
+    && mkdir -p "/opt/github-cli/${GH_VERSION}" \
+    && tar --extract --gzip --file "/tmp/${GH_ARCHIVE}" \
+        --directory "/opt/github-cli/${GH_VERSION}" --strip-components=1 \
+    && chmod +x "/opt/github-cli/${GH_VERSION}/bin/gh" \
+    && ln -sf \
+        "/opt/github-cli/${GH_VERSION}/bin/gh" \
+        /usr/local/bin/gh \
+    && rm -f "/tmp/${GH_ARCHIVE}" "/tmp/${GH_CHECKSUMS}" \
+    && command -v gh \
+    && gh --version
+
 # Installiert die globalen Node.js-Werkzeuge in exakt festgelegten Versionen.
 RUN npm install --global \
         "pnpm@${PNPM_VERSION}" \
@@ -125,6 +160,7 @@ RUN set -e \
     && command -v make \
     && command -v rg \
     && command -v fd \
+    && command -v gh \
     && command -v rsync \
     && command -v shellcheck \
     && command -v ssh \
@@ -154,6 +190,7 @@ RUN set -e \
     && make --version \
     && rg --version \
     && fd --version \
+    && gh --version \
     && rsync --version \
     && shellcheck --version \
     && ssh -V \
