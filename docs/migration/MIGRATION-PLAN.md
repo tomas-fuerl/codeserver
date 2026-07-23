@@ -71,7 +71,7 @@ abgeleitet oder in diese zurückgeschrieben.
 | MIG-013 | Backup-, Restore- und Laufzeitabnahme | NOT_STARTED | MIG-012, EXT-005, EXT-006 | EXT-007 und lokale Betriebsabnahmen |
 | MIG-014 | Codeserver aus Homelab entfernen | NOT_STARTED | MIG-013, EXT-007 | gegebenenfalls Homelab-PR/Push |
 | MIG-015 | Migration abschließen | NOT_STARTED | MIG-014 | gegebenenfalls finale GitHub-/Betriebsprüfung |
-| MIG-016 | GitHub CLI im code-server-Image bereitstellen | BLOCKED | veröffentlichter Repository-Ausgangsstand | EXT-012 `COMPLETED`, EXT-013 `PENDING` |
+| MIG-016 | GitHub CLI im code-server-Image bereitstellen | COMPLETED | veröffentlichter Repository-Ausgangsstand | EXT-012 `COMPLETED`, EXT-013 `COMPLETED` |
 
 `PENDING`-Einträge für spätere Tasks blockieren MIG-001 nicht. Sie werden zum
 Gate, sobald ihr zugehöriger Task erreicht wird.
@@ -440,7 +440,7 @@ Gate, sobald ihr zugehöriger Task erreicht wird.
 
 ## MIG-016: GitHub CLI im code-server-Image bereitstellen
 
-- **Status:** BLOCKED
+- **Status:** COMPLETED
 - **Ziel:** `gh` exakt gepinnt und offiziell checksum-verifiziert für `amd64`
   und `arm64` installieren, bestehende Werkzeugprüfungen erweitern und die
   manuelle persistente Betreiber-Authentifizierung sicher dokumentieren.
@@ -468,9 +468,15 @@ Gate, sobald ihr zugehöriger Task erreicht wird.
   erweitert. GitHub Actions Lauf 5 hat Repositoryvalidator,
   Compose-Validierung und den nicht veröffentlichten `linux/amd64`-Image-Build
   für Commit `8d1088f4f53ec25bc4ffe82deeba0edc95f52dd2` erfolgreich ausgeführt.
-  EXT-013 blockiert ausschließlich Testcontainer, Runtimeprüfung,
-  Konfigurationspfad, Neustartpersistenz und spätere interaktive Anmeldung.
-  Das ursprüngliche Commit-/Push-Verbot wurde durch ausdrückliche
-  Eigentümerfreigabe ausschließlich für `feat/add-github-cli` und dessen
-  Draft-PR-Pflege aufgehoben; Merge, Release, Tag und Deployment bleiben
-  ausgeschlossen.
+  Der Betreiber hat EXT-013 mit dem veröffentlichten `linux/amd64`-Image
+  `1.5.0` bei Digest
+  `sha256:9f1db9f29b10b1eea956d1803fcade35c7bf75ef476ea43a03c1abddeddeb82b`
+  abgeschlossen. Der isolierte Container war `running` und `healthy`;
+  `gh 2.96.0`, `HOME=/config`, leere XDG-/GH-Konfigurations-Overrides,
+  `GH_TELEMETRY=false` sowie die `/config`- und
+  Authentifizierungspersistenz nach Neustart wurden bestätigt. Der bestehende
+  code-server wurde durch den Betreiber auf die geprüfte Version aktualisiert.
+  Codex führte weder Docker- noch Deployment- oder Anmeldeaktionen aus. Für
+  die reine Abschlussdokumentation wurden Branch, Commit, Push und Draft-PR
+  ausdrücklich freigegeben; Merge, Release, Tag und weiteres Deployment
+  bleiben ausgeschlossen.

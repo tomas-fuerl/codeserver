@@ -371,15 +371,16 @@ EXT-010 ist vollständig erfüllt und blockiert MIG-006 nicht mehr.
 
 ## EXT-013: MIG-016-Runtime und GitHub-CLI-Persistenz prüfen
 
-- **Status:** PENDING
+- **Status:** COMPLETED
 - **Zugehöriger Task:** MIG-016
 - **Verantwortlich:** Betreiber
 - **Warum extern:** GitHub Actions hat das Image gebaut, aber keinen Container
   gestartet oder geladen. Codex darf nicht auf Docker-Daemon oder
   Docker-Socket zugreifen und führt keine interaktive GitHub-Anmeldung aus.
 - **Voraussetzungen:** Lokale MIG-016-Gates und der GitHub-Actions-Build sind
-  erfolgreich; ein nicht veröffentlichtes Testimage und ein isolierter
-  persistenter Test-`/config`-Mount stehen ohne Produktionsdaten bereit.
+  erfolgreich; das unveränderliche veröffentlichte Releaseimage und ein
+  isolierter persistenter Test-`/config`-Mount stehen ohne Produktionsdaten
+  bereit.
 - **Exakte Schritte:** Einen echten Testcontainer ohne veröffentlichte Ports,
   Produktionsmounts oder Credentials starten. Darin ausschließlich vorhandene
   Imagewerkzeuge prüfen: `command -v gh`, `gh --version`, `node --version`,
@@ -407,7 +408,7 @@ EXT-010 ist vollständig erfüllt und blockiert MIG-006 nicht mehr.
 - **Rollback / sichere Abbruchbedingung:** Bei Fehler kein Deployment und keine
   Anmeldung. Produktive Container und persistente Daten unverändert lassen.
 
-### Bereits vorhandener CI-Nachweis
+### CI- und Veröffentlichungsnachweis
 
 GitHub Actions führte für Commit
 `8d1088f4f53ec25bc4ffe82deeba0edc95f52dd2` den Workflow `CI`, Lauf 5
@@ -415,6 +416,45 @@ GitHub Actions führte für Commit
 `Validate repository`, `Validate Compose contract` und
 `Build image without publishing` für `linux/amd64`. Der Build verwendete
 `push: false` und `load: false`; ein Container wurde deshalb weder gestartet
-noch auf Persistenz geprüft. EXT-013 bleibt ausschließlich für die oben
-genannten Runtime-, Konfigurationspfad-, Neustart- und späteren
-Anmeldungsprüfungen `PENDING`.
+noch auf Persistenz geprüft.
+
+Der erfolgreiche Workflow `Publish container image`, Lauf `30041049040`,
+veröffentlichte anschließend für Tag `v1.5.0` und Commit
+`ca82b17bf9049b202244c1c8765c86217b39aead` das `linux/amd64`-Image
+`ghcr.io/tomas-fuerl/codeserver:1.5.0` mit Digest
+`sha256:9f1db9f29b10b1eea956d1803fcade35c7bf75ef476ea43a03c1abddeddeb82b`.
+
+### Maßgeblicher Betreiberbeleg
+
+Der Betreiber meldete EXT-013 am 2026-07-23 ausdrücklich als erfolgreich
+abgeschlossen. Die getesteten Platzhalter wurden gegen den erfolgreichen
+öffentlichen Publish-Lauf eindeutig auf Version `1.5.0` und den oben genannten
+Digest aufgelöst.
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| Releaseimage veröffentlicht | ja |
+| Getestete Imageversion | `1.5.0` |
+| Getesteter Image-Digest | `sha256:9f1db9f29b10b1eea956d1803fcade35c7bf75ef476ea43a03c1abddeddeb82b` |
+| Plattform | `linux/amd64` |
+| Isolierter Testcontainer gestartet | ja |
+| Containerstatus | `running` |
+| Healthstatus | `healthy` |
+| GitHub CLI | `gh version 2.96.0` |
+| `HOME` | `/config` |
+| `XDG_CONFIG_HOME` | leer |
+| `GH_CONFIG_DIR` | leer |
+| `GH_TELEMETRY` | `false` |
+| `/config`-Persistenz über Neustart | bestätigt |
+| Bestehender code-server aktualisiert | ja, auf die geprüfte Version |
+| `gh auth login` im dauerhaften code-server | durch den Betreiber ausgeführt |
+| `gh auth status` nach Neustart | erfolgreich |
+| Authentifizierter Benutzer | `tomas-fuerl` |
+| Tokens oder Inhalte von `hosts.yml` protokolliert | nein |
+
+Codex hat weder Docker-Daemon noch Docker-Socket verwendet, keine
+Authentifizierungsdatei geöffnet und weder Anmeldung noch Update oder
+Deployment ausgeführt. Der Betreiberbeleg enthält keine Tokens oder
+`hosts.yml`-Inhalte. Damit sind Runtime-, Health-, Konfigurationspfad-,
+Neustart- und Anmeldepersistenzprüfung erfüllt; EXT-013 blockiert MIG-016 nicht
+mehr.
