@@ -124,7 +124,7 @@ jobs:
           file: ./Dockerfile
           platforms: linux/arm64
           push: false
-          outputs: type=oci,dest=${{ runner.temp }}/codeserver-arm64.tar
+          outputs: type=docker,dest=${{ runner.temp }}/codeserver-arm64.tar
           provenance: false
           sbom: false
           cache-from: type=gha
