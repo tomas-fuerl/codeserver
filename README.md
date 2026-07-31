@@ -43,7 +43,7 @@ unter [CI und Container-Publishing](docs/CI-CD.md) und
 
 Das Entwicklungsimage enthält systemweite CLI-Werkzeuge, aber keinen Docker-
 Daemon und keinen Docker-Socket. Die Basis bleibt der aktuelle, vollständig
-digestfixierte LinuxServer-Stand `4.128.0-ls351` (`sha256:dfc5…5441`) für
+digestfixierte LinuxServer-Stand `4.131.0-ls354` (`sha256:621d…bad7`) für
 `linux/amd64` und `linux/arm64`; ein allgemeines `dist-upgrade` ist nicht Teil
 des Builds.
 

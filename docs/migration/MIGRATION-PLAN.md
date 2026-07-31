@@ -492,8 +492,9 @@ Gate, sobald ihr zugehöriger Task erreicht wird.
   `5.3.1-1~ubuntu.24.04~noble`, Buildx `0.36.0-1~ubuntu.24.04~noble` und
   Trivy `0.72.0`.
 - **Abhängigkeiten:** MIG-016 `COMPLETED`; der Basisdigest
-  `lscr.io/linuxserver/code-server:4.128.0-ls351@sha256:dfc5…5441` bleibt
-  unverändert, weil sein öffentlicher Multiarch-Manifestdigest geprüft wurde.
+  `lscr.io/linuxserver/code-server:4.131.0-ls354@sha256:621d…bad7` wurde als
+  aktueller öffentlicher Multiarch-Manifestdigest geprüft und ersetzt den zuvor
+  geprüften `4.128.0-ls351`-Stand nach den ersten PR-CI-Befunden.
 - **Erlaubte Änderungen:** `Dockerfile`, `.github/workflows/ci.yml`,
   vorhandene Toolchain-/Installations-/Repositoryprüfungen, der neue
   wiederverwendbare Einstieg `scripts/ci/run-trivy-scan.sh`, unmittelbar

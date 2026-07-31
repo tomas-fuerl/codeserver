@@ -1,4 +1,4 @@
-FROM lscr.io/linuxserver/code-server:4.128.0-ls351@sha256:dfc5e74083f43f3cb217fedfead149f32b319ee663744351c001bdc5e4245441
+FROM lscr.io/linuxserver/code-server:4.131.0-ls354@sha256:621d47575a19645f4267f68a77167ca0b4562d042717dbe0dbba318c9753bad7
 LABEL org.opencontainers.image.source="https://github.com/tomas-fuerl/codeserver"
 
 ARG TARGETARCH

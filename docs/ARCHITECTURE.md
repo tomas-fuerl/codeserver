@@ -29,7 +29,7 @@ in [CONFIGURATION.md](CONFIGURATION.md).
 
 ## Imagezustand
 
-Das Dockerfile basiert auf `lscr.io/linuxserver/code-server:4.128.0-ls351`
+Das Dockerfile basiert auf `lscr.io/linuxserver/code-server:4.131.0-ls354`
 mit vollständig gepinntem SHA-256-Manifest-Digest. GitHub CLI, Node und
 PowerShell werden aus exakt gepinnten offiziellen Releases installiert und
 gegen offizielle SHA-256-Werte geprüft; pnpm und Codex sind exakt gepinnte
@@ -45,7 +45,8 @@ PGDG-Repository; Docker CLI `5:29.7.0-1~ubuntu.24.04~noble`, Compose V2
 aus dem signierten offiziellen Docker-Repository; Trivy `0.72.0` kommt aus
 dem offiziellen Aqua-Security-Archiv mit geprüfter Release-Checksummenliste.
 Alle Pins gelten für Ubuntu Noble auf `amd64` und `arm64`; der Basisdigest
-bleibt unverändert, weil der öffentliche Manifestdigest aktuell geprüft wurde.
+wurde auf den aktuell veröffentlichten `4.131.0-ls354`-Manifeststand aktualisiert,
+um die erste CI-Befundlage gezielt zu remediieren.
 
 Die Werkzeuge sind CLIs. Der Build installiert weder `docker-ce` noch
 `docker.io`, `dockerd`, `containerd` oder `containerd.io`, richtet keine
