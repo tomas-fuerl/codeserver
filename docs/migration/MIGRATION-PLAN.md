@@ -72,7 +72,7 @@ abgeleitet oder in diese zurückgeschrieben.
 | MIG-014 | Codeserver aus Homelab entfernen | NOT_STARTED | MIG-013, EXT-007 | gegebenenfalls Homelab-PR/Push |
 | MIG-015 | Migration abschließen | NOT_STARTED | MIG-014 | gegebenenfalls finale GitHub-/Betriebsprüfung |
 | MIG-016 | GitHub CLI im code-server-Image bereitstellen | COMPLETED | veröffentlichter Repository-Ausgangsstand | EXT-012 `COMPLETED`, EXT-013 `COMPLETED` |
-| MIG-017 | code-server-Image für SoSeBaMa-Entwicklung vorbereiten | READY_FOR_REVIEW | MIG-016 `COMPLETED` | PR-CI und menschliche Abnahme offen; GitHub-PR-CI ist ausdrücklich freigegeben |
+| MIG-017 | code-server-Image für SoSeBaMa-Entwicklung vorbereiten | BLOCKED | MIG-016 `COMPLETED` | ungeklärte HIGH/CRITICAL-Befunde im PR-Image-Scan; Eigentümerentscheidung erforderlich |
 
 `PENDING`-Einträge für spätere Tasks blockieren MIG-001 nicht. Sie werden zum
 Gate, sobald ihr zugehöriger Task erreicht wird.
@@ -484,7 +484,7 @@ Gate, sobald ihr zugehöriger Task erreicht wird.
 
 ## MIG-017: code-server-Image für SoSeBaMa-Entwicklung vorbereiten
 
-- **Status:** READY_FOR_REVIEW
+- **Status:** BLOCKED
 - **Ziel:** Das bestehende digestfixierte LinuxServer-code-server-Image um die
   reproduzierbare, daemonlose SoSeBaMa-Systemtoolchain erweitern: pnpm
   `11.4.0`, PostgreSQL-18-Client `18.4-1.pgdg24.04+1`, Docker CLI
@@ -529,7 +529,8 @@ Gate, sobald ihr zugehöriger Task erreicht wird.
   beide Architekturen, Runtime-Smoke und alle Trivy-Scans nach; keine ungeklärten
   `HIGH`-/`CRITICAL`-Befunde; `TASK-RESULT.md` ist wahrheitsgemäß. Der Task
   endet höchstens mit `READY_FOR_REVIEW`; `COMPLETED` ist erst nach
-  menschlicher Abnahme und Merge zulässig.
+  menschlicher Abnahme und Merge zulässig. Der aktuelle Status ist wegen der
+  ungeklärten PR-Imagebefunde `BLOCKED`; eine Eigentümerentscheidung ist offen.
 - **Rollback / Abbruchstrategie:** Bei nicht ausführbarer Prüfung oder einem
   nicht sicher behebbaren `HIGH`-/`CRITICAL`-Befund MIG-017 auf `BLOCKED`
   setzen, Befund und betroffene Schicht dokumentieren und keine Ignore-Regel
