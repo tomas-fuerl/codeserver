@@ -4,9 +4,18 @@ LABEL org.opencontainers.image.source="https://github.com/tomas-fuerl/codeserver
 ARG TARGETARCH
 ARG NODE_VERSION=24.18.0
 ARG GH_VERSION=2.96.0
-ARG PNPM_VERSION=10.13.1
+ARG PNPM_VERSION=11.4.0
+ARG PNPM_SHA512=f0febc7e37552ab485494a914241b338e0b3580b93d54ce31f00933015880863129038a1b4ae4e414a0ee63ac35bf21197e990172c4a68256450b5636310968f
 ARG POWERSHELL_VERSION=7.6.3
 ARG CODEX_VERSION="0.144.5"
+ARG PG_CLIENT_VERSION=18.4-1.pgdg24.04+1
+ARG DOCKER_CLI_VERSION=5:29.7.0-1~ubuntu.24.04~noble
+ARG DOCKER_COMPOSE_VERSION=5.3.1-1~ubuntu.24.04~noble
+ARG DOCKER_BUILDX_VERSION=0.36.0-1~ubuntu.24.04~noble
+ARG TRIVY_VERSION=0.72.0
+ARG TRIVY_CHECKSUMS_SHA256=ebe9d19a774b950e240b1017a038e9b5a002ea068e02023369ff6d241c10c580
+ARG TRIVY_AMD64_SHA256=bbb64b9695866ce4a7a8f5c9592002c5961cab378577fa3f8a040df362b9b2ea
+ARG TRIVY_ARM64_SHA256=2ca2c023109c2db6b2b77366b6717291452d4531167377d95c79547f0c8e3467
 
 ENV GH_TELEMETRY=false
 
@@ -26,6 +35,7 @@ RUN apt-get update \
         dnsutils \
         fd-find \
         git \
+        gpg \
         iputils-ping \
         jq \
         less \
@@ -47,6 +57,52 @@ RUN apt-get update \
         zip \
         zlib1g \
     && ln -sf /usr/bin/fdfind /usr/local/bin/fd \
+    && . /etc/os-release \
+    && [[ "${ID:-}" == "ubuntu" && "${VERSION_CODENAME:-}" == "noble" ]] \
+    && APT_ARCH="$(dpkg --print-architecture)" \
+    && case "${APT_ARCH}" in amd64|arm64) ;; *) echo "Nicht unterstützte Architektur: ${APT_ARCH}" >&2; exit 1 ;; esac \
+    && install -d -m 0755 /etc/apt/keyrings \
+    && curl --fail --show-error --location --retry 3 \
+        --output /etc/apt/keyrings/apt.postgresql.org.asc \
+        https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+    && curl --fail --show-error --location --retry 3 \
+        --output /etc/apt/keyrings/docker.asc \
+        https://download.docker.com/linux/ubuntu/gpg \
+    && PGDG_FINGERPRINT="B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8" \
+    && DOCKER_FINGERPRINT="9DC858229FC7DD38854AE2D88D81803C0EBFCD88" \
+    && gpg --show-keys --with-colons /etc/apt/keyrings/apt.postgresql.org.asc \
+        | awk -F: '$1 == "fpr" { print toupper($10) }' \
+        | grep -Fxq "${PGDG_FINGERPRINT}" \
+    && gpg --show-keys --with-colons /etc/apt/keyrings/docker.asc \
+        | awk -F: '$1 == "fpr" { print toupper($10) }' \
+        | grep -Fxq "${DOCKER_FINGERPRINT}" \
+    && printf '%s\n' \
+        "Types: deb" \
+        "URIs: https://apt.postgresql.org/pub/repos/apt" \
+        "Suites: noble-pgdg" \
+        "Components: main" \
+        "Architectures: ${APT_ARCH}" \
+        "Signed-By: /etc/apt/keyrings/apt.postgresql.org.asc" \
+        >/etc/apt/sources.list.d/pgdg.sources \
+    && printf '%s\n' \
+        "Types: deb" \
+        "URIs: https://download.docker.com/linux/ubuntu" \
+        "Suites: noble" \
+        "Components: stable" \
+        "Architectures: ${APT_ARCH}" \
+        "Signed-By: /etc/apt/keyrings/docker.asc" \
+        >/etc/apt/sources.list.d/docker.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        "postgresql-client-18=${PG_CLIENT_VERSION}" \
+        "docker-ce-cli=${DOCKER_CLI_VERSION}" \
+        "docker-compose-plugin=${DOCKER_COMPOSE_VERSION}" \
+        "docker-buildx-plugin=${DOCKER_BUILDX_VERSION}" \
+    && apt-get purge -y --auto-remove gpg \
+    && rm -f /etc/apt/sources.list.d/pgdg.sources \
+        /etc/apt/sources.list.d/docker.sources \
+        /etc/apt/keyrings/apt.postgresql.org.asc \
+        /etc/apt/keyrings/docker.asc \
     && rm -rf /var/lib/apt/lists/*
 
 # Installiert eine exakt festgelegte Node.js-Version und prüft das Archiv
@@ -107,8 +163,14 @@ RUN BUILD_ARCH="${TARGETARCH:-$(dpkg --print-architecture)}" \
 
 # Installiert die globalen Node.js-Werkzeuge in exakt festgelegten Versionen.
 RUN npm install --global \
-        "pnpm@${PNPM_VERSION}" \
         "@openai/codex@${CODEX_VERSION}" \
+    && npm pack --ignore-scripts --pack-destination /tmp \
+        "pnpm@${PNPM_VERSION}" \
+    && echo "${PNPM_SHA512}  /tmp/pnpm-${PNPM_VERSION}.tgz" \
+        | sha512sum --check --strict - \
+    && npm install --global --ignore-scripts \
+        "/tmp/pnpm-${PNPM_VERSION}.tgz" \
+    && rm -f "/tmp/pnpm-${PNPM_VERSION}.tgz" \
     && command -v pnpm \
     && command -v codex \
     && pnpm --version \
@@ -144,6 +206,44 @@ RUN BUILD_ARCH="${TARGETARCH:-$(dpkg --print-architecture)}" \
         /usr/local/bin/pwsh \
     && rm -f "/tmp/${PWSH_ARCHIVE}"
 
+# Trivy wird ausschließlich aus dem offiziellen Aqua-Security-Releasearchiv
+# installiert. Die offizielle Prüfsummenliste wird selbst checksum-geprüft.
+RUN BUILD_ARCH="${TARGETARCH:-$(dpkg --print-architecture)}" \
+    && case "${BUILD_ARCH}" in \
+        amd64) \
+            TRIVY_ARCH="64bit"; \
+            TRIVY_SHA256="${TRIVY_AMD64_SHA256}" \
+            ;; \
+        arm64) \
+            TRIVY_ARCH="ARM64"; \
+            TRIVY_SHA256="${TRIVY_ARM64_SHA256}" \
+            ;; \
+        *) echo "Nicht unterstützte Architektur: ${BUILD_ARCH}" >&2; exit 1 ;; \
+    esac \
+    && TRIVY_ARCHIVE="trivy_${TRIVY_VERSION}_Linux-${TRIVY_ARCH}.tar.gz" \
+    && TRIVY_CHECKSUMS="trivy_${TRIVY_VERSION}_checksums.txt" \
+    && curl --fail --show-error --location --retry 3 \
+        --output "/tmp/${TRIVY_ARCHIVE}" \
+        "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${TRIVY_ARCHIVE}" \
+    && curl --fail --show-error --location --retry 3 \
+        --output "/tmp/${TRIVY_CHECKSUMS}" \
+        "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${TRIVY_CHECKSUMS}" \
+    && echo "${TRIVY_CHECKSUMS_SHA256}  /tmp/${TRIVY_CHECKSUMS}" \
+        | sha256sum --check --strict - \
+    && awk -v archive="${TRIVY_ARCHIVE}" -v expected="${TRIVY_SHA256}" \
+        '$2 == archive && NF == 2 && $1 == expected { count += 1 } END { exit count == 1 ? 0 : 1 }' \
+        "/tmp/${TRIVY_CHECKSUMS}" \
+    && mkdir -p "/opt/aqua-security/trivy/${TRIVY_VERSION}" \
+    && tar --extract --gzip --file "/tmp/${TRIVY_ARCHIVE}" \
+        --directory "/opt/aqua-security/trivy/${TRIVY_VERSION}" trivy \
+    && chmod +x "/opt/aqua-security/trivy/${TRIVY_VERSION}/trivy" \
+    && ln -sf \
+        "/opt/aqua-security/trivy/${TRIVY_VERSION}/trivy" \
+        /usr/local/bin/trivy \
+    && rm -f "/tmp/${TRIVY_ARCHIVE}" "/tmp/${TRIVY_CHECKSUMS}"
+
+ENV TRIVY_CACHE_DIR=/config/.cache/trivy
+
 # Der Build schlägt fehl, falls eines der zentralen Werkzeuge fehlt
 # oder nicht ausgeführt werden kann.
 RUN set -e \
@@ -163,6 +263,22 @@ RUN set -e \
     && command -v rg \
     && command -v fd \
     && command -v gh \
+    && command -v psql \
+    && command -v pg_isready \
+    && command -v pg_dump \
+    && command -v pg_restore \
+    && command -v docker \
+    && command -v trivy \
+    && test ! -S /var/run/docker.sock \
+    && ! command -v dockerd \
+    && ! command -v containerd \
+    && for forbidden_package in docker-ce docker.io dockerd containerd containerd.io; do \
+        if dpkg-query -W -f='${Status}' "${forbidden_package}" 2>/dev/null \
+            | grep -Fq 'install ok installed'; then \
+            echo "Verbotenes Docker-Daemonpaket installiert: ${forbidden_package}" >&2; \
+            exit 1; \
+        fi; \
+    done \
     && command -v rsync \
     && command -v shellcheck \
     && command -v ssh \
@@ -193,6 +309,14 @@ RUN set -e \
     && rg --version \
     && fd --version \
     && gh --version \
+    && psql --version \
+    && pg_isready --version \
+    && pg_dump --version \
+    && pg_restore --version \
+    && docker --version \
+    && docker compose version \
+    && docker buildx version \
+    && trivy --version \
     && rsync --version \
     && shellcheck --version \
     && ssh -V \

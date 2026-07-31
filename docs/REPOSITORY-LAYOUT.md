@@ -13,7 +13,8 @@
 - `AGENTS.md`: verbindliche Regeln für Repository-Agenten.
 - `CONTRIBUTING.md`: öffentlicher Beitrags- und Reviewablauf.
 - `Dockerfile`: reproduzierbare Imagequelle mit gepinnter, offiziell
-  checksum-verifizierter GitHub CLI für `amd64` und `arm64`.
+  checksum-/integrity-verifizierter Node-, pnpm-, PostgreSQL-, Docker- und
+  Trivy-CLI-Toolchain für `amd64` und `arm64`; kein Docker-Daemon.
 - `LICENSE`: Lizenz des Repositorys.
 - `README.md`: öffentliche Einstiegseite und Dokumentationsindex.
 - `SECURITY.md`: Meldeweg und Supply-Chain-Sicherheitsvertrag.
@@ -25,14 +26,15 @@
 
 ## GitHub-Konfiguration
 
-- `.github/workflows/ci.yml` definiert das read-only Qualitätsgate und einen
-  nicht veröffentlichenden `linux/amd64`-Build.
+- `.github/workflows/ci.yml` definiert das read-only Qualitätsgate, die
+  QEMU-geprüften `linux/amd64`-/`linux/arm64`-Builds, den isolierten
+  `amd64`-Runtime-Smoke-Test und die blockierenden Trivy-Scans.
 - `.github/workflows/publish-image.yml` veröffentlicht ausschließlich nach
   einem strikten SemVer-Tag, erzeugt nur vollständigen Patch- und Full-SHA-Tag
   sowie Digest, SBOM und Attestation. `MAJOR.MINOR`, `MAJOR` und `latest`
   werden nicht erzeugt.
 - `.github/dependabot.yml` schlägt monatlich reviewpflichtige Actions- und
-  Docker-Updates vor.
+  Docker-Updates vor; das erfasst auch den vollständigen QEMU-Action-Pin.
 - `.github/pull_request_template.md` hält Scope-, Security-, Prüf- und
   Rollbacknachweise fest.
 
@@ -68,10 +70,14 @@ keinen Workflow aus.
   Rootdatei `extensions.lock.txt`; ein optionaler Override muss absolut sein.
 - `scripts/verify-backup.sh` prüft Archiv, Prüfsumme und Pflichtinhalte.
 - `scripts/verify-developer-tools.sh` prüft Entwicklungswerkzeuge einschließlich
-  `gh` und gibt deren Versionen aus.
+  PostgreSQL-, Docker- und Trivy-CLI und verweigert Daemon-/Socketzugriff.
 - `scripts/verify-installation.sh` verwendet standardmäßig den daemonfreien
   Modus `--static`; `--runtime` ist nur eine ausdrückliche Betreiberprüfung.
-- `scripts/verify-toolchain.sh` prüft die gepinnten Imagewerkzeuge einschließlich `gh`.
+- `scripts/verify-toolchain.sh` prüft die gepinnten Imagewerkzeuge einschließlich
+  pnpm, PostgreSQL, Docker CLI/Compose/Buildx und Trivy.
+- `scripts/ci/run-trivy-scan.sh` ist der wiederverwendbare lokale/CI-Einstieg
+  für Dateisystem-, Konfigurations- und Image-Scans mit blockierenden
+  `HIGH`-/`CRITICAL`-Exitcodes.
 - `scripts/ci/validate-repository.sh` bündelt die lokalen statischen Gates.
 - `scripts/ci/validate-actions.sh` prüft Trigger, Pins, Berechtigungen und
   Publish-Vertrag ohne YAML-Ausführung.

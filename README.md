@@ -28,8 +28,9 @@ Das lokale, daemonfreie Repository-Gate ist:
 ./scripts/ci/validate-repository.sh
 ```
 
-Die zukünftige CI validiert Repository und Compose-Vertrag und baut
-`linux/amd64` ohne Push. Der Publish-Workflow akzeptiert ausschließlich
+Die PR-CI validiert Repository und Compose-Vertrag und baut
+`linux/amd64` sowie `linux/arm64` ohne Push; der Publish-Workflow bleibt
+separat. Er akzeptiert ausschließlich
 strikte Release-Tags `vMAJOR.MINOR.PATCH` und veröffentlicht ausschließlich
 `MAJOR.MINOR.PATCH` sowie `sha-<full-commit>`. `MAJOR.MINOR`, `MAJOR`,
 `latest` und Imagetags mit führendem `v` sind ausgeschlossen. Portainer
@@ -37,6 +38,57 @@ verwendet den vollständigen Patch-Tag oder den geprüften Digest. Digest, SBOM
 und Provenienz-Attestation bilden den späteren Freigabenachweis. Details stehen
 unter [CI und Container-Publishing](docs/CI-CD.md) und
 [Releases](docs/RELEASES.md).
+
+## SoSeBaMa-Toolchain (MIG-017)
+
+Das Entwicklungsimage enthält systemweite CLI-Werkzeuge, aber keinen Docker-
+Daemon und keinen Docker-Socket. Die Basis bleibt der aktuelle, vollständig
+digestfixierte LinuxServer-Stand `4.128.0-ls351` (`sha256:dfc5…5441`) für
+`linux/amd64` und `linux/arm64`; ein allgemeines `dist-upgrade` ist nicht Teil
+des Builds.
+
+| Werkzeug | Exakte Version | Offizielle Quelle und Integritätsnachweis |
+| --- | --- | --- |
+| Node.js | `24.18.0` (unverändert) | nodejs.org-Archiv und `SHASUMS256.txt` |
+| pnpm | `11.4.0` | npm-Paket `pnpm@11.4.0`, Registry-Integrity `sha512-8P68fjdVKrSFSUqRQkGzOOCzWAuT1UzjHwCTMBWICGMSkDihtK5OQUoO5jrDW/IRl+mQFyxKaCVkULVjYxCWjw==` |
+| PostgreSQL-Client | `18.4-1.pgdg24.04+1` | offizielles PGDG-Repository, Fingerprint `B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8`, `signed-by`-Keyring |
+| Docker CLI | `5:29.7.0-1~ubuntu.24.04~noble` | offizielles Docker-Repository, Fingerprint `9DC858229FC7DD38854AE2D88D81803C0EBFCD88`, `signed-by`-Keyring |
+| Compose V2 | `5.3.1-1~ubuntu.24.04~noble` | dasselbe Docker-Repository und derselbe signierte Paketindex |
+| Buildx | `0.36.0-1~ubuntu.24.04~noble` | dasselbe Docker-Repository und derselbe signierte Paketindex |
+| Trivy | `0.72.0` | offizielles Aqua-Security-Archiv, geprüfte Checksummenliste und architekturspezifische SHA-256-Prüfsumme |
+
+PGDG- und Docker-Pakete sind für Ubuntu Noble auf `amd64` und `arm64`
+verfügbar. Trivy verwendet `/config/.cache/trivy`; dort liegen keine
+produktiven Scanberichte oder Secrets. Im normalen Container werden weder
+`docker-ce`, `docker.io`, `dockerd`, `containerd` noch `containerd.io`
+installiert; Compose und Buildx sind ausschließlich CLI-Plugins. Ein fehlender
+`/var/run/docker.sock` ist deshalb ein beabsichtigtes Sicherheitsmerkmal.
+
+Lokal ohne Daemon sind Versions- und Vertragstests möglich:
+
+```bash
+./scripts/verify-developer-tools.sh
+./scripts/verify-toolchain.sh
+./scripts/verify-installation.sh --static
+./scripts/ci/run-trivy-scan.sh --help
+```
+
+Der echte Multiarch-Build, Runtime-Smoke-Test und Image-Scan laufen nur auf
+GitHub-hosted Runnern. CI baut `linux/amd64` und `linux/arm64`, startet nur für
+`amd64` einen isolierten Container ohne Mounts, Secrets oder Socket und lässt
+Trivy bei jedem ungeklärten `HIGH`- oder `CRITICAL`-Befund fehlschlagen.
+`MEDIUM` und niedrigere Befunde werden im Laufprotokoll zusammengefasst.
+
+React, Vite, NestJS, TypeScript, Prisma, Vitest, Playwright, Testcontainers,
+Zod, Dexie, PDF.js, `react-konva`, `pg-boss` und qpdf gehören nicht global in
+dieses Image. Diese Abhängigkeiten werden später im SoSeBaMa-Repository oder
+in dedizierten Anwendungs- und Prüfimages fixiert.
+
+Werkzeugupdates erfolgen durch Änderung der benannten `ARG`-Pins, erneute
+Quellen-/Checksumprüfung und grüne PR-CI. Bei einem fehlenden Patch oder einem
+ungeklärten `HIGH`/`CRITICAL`-Befund bleibt MIG-017 blockiert. Rollbacks setzen
+den vorherigen freigegebenen Image-Digest in Portainer; persistente Daten,
+Secrets und der Docker-Daemon bleiben unangetastet.
 
 ## Öffentlicher Vertrag und lokaler Zustand
 

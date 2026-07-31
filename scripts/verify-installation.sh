@@ -95,6 +95,7 @@ run_static_checks() {
     scripts/restore-config.sh
     scripts/verify-backup.sh
     scripts/verify-installation.sh
+    scripts/ci/run-trivy-scan.sh
     scripts/security/publication-audit.sh
   )
   local relative_path=""
@@ -242,7 +243,13 @@ for required_reference in (
     "ARG NODE_VERSION=24.18.0",
     "ARG GH_VERSION=2.96.0",
     "GH_CHECKSUMS_SHA256=\"fc046371efa250e2875208341a786a35a01717d5eebec6903e199a9b8a3f3565\"",
-    "ARG PNPM_VERSION=10.13.1",
+    "ARG PNPM_VERSION=11.4.0",
+    "PNPM_SHA512=f0febc7e37552ab485494a914241b338e0b3580b93d54ce31f00933015880863129038a1b4ae4e414a0ee63ac35bf21197e990172c4a68256450b5636310968f",
+    "ARG PG_CLIENT_VERSION=18.4-1.pgdg24.04+1",
+    "ARG DOCKER_CLI_VERSION=5:29.7.0-1~ubuntu.24.04~noble",
+    "ARG DOCKER_COMPOSE_VERSION=5.3.1-1~ubuntu.24.04~noble",
+    "ARG DOCKER_BUILDX_VERSION=0.36.0-1~ubuntu.24.04~noble",
+    "ARG TRIVY_VERSION=0.72.0",
     "ARG POWERSHELL_VERSION=7.6.3",
     "ARG CODEX_VERSION=\"0.144.5\"",
     "https://nodejs.org/dist/v${NODE_VERSION}/${NODE_ARCHIVE}",
@@ -258,6 +265,32 @@ for required_reference in (
     "gh --version",
     "pnpm@${PNPM_VERSION}",
     "@openai/codex@${CODEX_VERSION}",
+    "https://www.postgresql.org/media/keys/ACCC4CF8.asc",
+    "https://apt.postgresql.org/pub/repos/apt",
+    "https://download.docker.com/linux/ubuntu/gpg",
+    "https://download.docker.com/linux/ubuntu",
+    "Signed-By: /etc/apt/keyrings/apt.postgresql.org.asc",
+    "Signed-By: /etc/apt/keyrings/docker.asc",
+    "PGDG_FINGERPRINT=\"B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8\"",
+    "DOCKER_FINGERPRINT=\"9DC858229FC7DD38854AE2D88D81803C0EBFCD88\"",
+    "pnpm-${PNPM_VERSION}.tgz",
+    "sha512sum --check --strict",
+    "TRIVY_CHECKSUMS_SHA256=ebe9d19a774b950e240b1017a038e9b5a002ea068e02023369ff6d241c10c580",
+    "TRIVY_AMD64_SHA256=bbb64b9695866ce4a7a8f5c9592002c5961cab378577fa3f8a040df362b9b2ea",
+    "TRIVY_ARM64_SHA256=2ca2c023109c2db6b2b77366b6717291452d4531167377d95c79547f0c8e3467",
+    "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${TRIVY_ARCHIVE}",
+    "ENV TRIVY_CACHE_DIR=/config/.cache/trivy",
+    "command -v psql",
+    "command -v pg_isready",
+    "command -v pg_dump",
+    "command -v pg_restore",
+    "command -v docker",
+    "docker compose version",
+    "docker buildx version",
+    "command -v trivy",
+    "test ! -S /var/run/docker.sock",
+    "! command -v dockerd",
+    "! command -v containerd",
 ):
     require(required_reference in dockerfile, "Dockerfile-Werkzeugversion oder offizielle Quelle fehlt")
 require(
@@ -271,6 +304,18 @@ require(
 require(
     re.search(r"^\s*gh\s*\\?$", dockerfile, re.MULTILINE) is None,
     "GitHub CLI darf nicht über apt installiert werden",
+)
+require(
+    re.search(r"^\s*(docker-ce|docker.io|dockerd|containerd|containerd.io)\s*", dockerfile, re.MULTILINE) is None,
+    "Dockerfile darf keine Docker-Daemonpakete installieren",
+)
+require(
+    "apt-key" not in dockerfile,
+    "Dockerfile darf apt-key nicht verwenden",
+)
+require(
+    re.search(r"^\s*ENV TRIVY_CACHE_DIR=/config/\.cache/trivy$", dockerfile, re.MULTILINE) is not None,
+    "Trivy-Cache muss unterhalb von /config liegen",
 )
 
 publication_audit = root / "scripts/security/publication-audit.sh"

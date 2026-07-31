@@ -72,6 +72,7 @@ abgeleitet oder in diese zurückgeschrieben.
 | MIG-014 | Codeserver aus Homelab entfernen | NOT_STARTED | MIG-013, EXT-007 | gegebenenfalls Homelab-PR/Push |
 | MIG-015 | Migration abschließen | NOT_STARTED | MIG-014 | gegebenenfalls finale GitHub-/Betriebsprüfung |
 | MIG-016 | GitHub CLI im code-server-Image bereitstellen | COMPLETED | veröffentlichter Repository-Ausgangsstand | EXT-012 `COMPLETED`, EXT-013 `COMPLETED` |
+| MIG-017 | code-server-Image für SoSeBaMa-Entwicklung vorbereiten | READY_FOR_REVIEW | MIG-016 `COMPLETED` | PR-CI und menschliche Abnahme offen; GitHub-PR-CI ist ausdrücklich freigegeben |
 
 `PENDING`-Einträge für spätere Tasks blockieren MIG-001 nicht. Sie werden zum
 Gate, sobald ihr zugehöriger Task erreicht wird.
@@ -480,3 +481,57 @@ Gate, sobald ihr zugehöriger Task erreicht wird.
   die reine Abschlussdokumentation wurden Branch, Commit, Push und Draft-PR
   ausdrücklich freigegeben; Merge, Release, Tag und weiteres Deployment
   bleiben ausgeschlossen.
+
+## MIG-017: code-server-Image für SoSeBaMa-Entwicklung vorbereiten
+
+- **Status:** READY_FOR_REVIEW
+- **Ziel:** Das bestehende digestfixierte LinuxServer-code-server-Image um die
+  reproduzierbare, daemonlose SoSeBaMa-Systemtoolchain erweitern: pnpm
+  `11.4.0`, PostgreSQL-18-Client `18.4-1.pgdg24.04+1`, Docker CLI
+  `5:29.7.0-1~ubuntu.24.04~noble`, Compose V2
+  `5.3.1-1~ubuntu.24.04~noble`, Buildx `0.36.0-1~ubuntu.24.04~noble` und
+  Trivy `0.72.0`.
+- **Abhängigkeiten:** MIG-016 `COMPLETED`; der Basisdigest
+  `lscr.io/linuxserver/code-server:4.128.0-ls351@sha256:dfc5…5441` bleibt
+  unverändert, weil sein öffentlicher Multiarch-Manifestdigest geprüft wurde.
+- **Erlaubte Änderungen:** `Dockerfile`, `.github/workflows/ci.yml`,
+  vorhandene Toolchain-/Installations-/Repositoryprüfungen, der neue
+  wiederverwendbare Einstieg `scripts/ci/run-trivy-scan.sh`, unmittelbar
+  betroffene Entwickler-/Betreiberdokumentation, dieses Dokument, die
+  `MIG-017`-Taskdatei und der lokale ignorierte `TASK-RESULT.md`.
+  `.github/workflows/publish-image.yml`, `compose.yaml`, Portainer-, Secret-,
+  Release- und Deploymentverträge bleiben unverändert.
+- **Quellen- und Integritätsvertrag:** pnpm stammt aus npm und wird über die
+  offizielle Registry-Integrity `sha512-8P68fjdVKrSFSUqRQkGzOOCzWAuT1UzjHwCTMBWICGMSkDihtK5OQUoO5jrDW/IRl+mQFyxKaCVkULVjYxCWjw==`
+  geprüft. PGDG- und Docker-APT-Quellen verwenden dedizierte `signed-by`-
+  Keyrings und die Fingerprints `B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8`
+  beziehungsweise `9DC858229FC7DD38854AE2D88D81803C0EBFCD88`. Trivy stammt aus
+  dem offiziellen Aqua-Security-Archiv; die Checksummenliste und die
+  `amd64`-/`arm64`-Archive werden SHA-256-geprüft. Alle Quellen unterstützen
+  Ubuntu Noble auf `amd64` und `arm64`; Lizenzen sind MIT (pnpm/Trivy) bzw.
+  Apache-2.0-/PostgreSQL-Lizenz der offiziellen Paketquellen.
+- **CI- und Sicherheitsvertrag:** Die PR-CI validiert unverändert alle
+  Repositorygates, richtet QEMU über einen vollständigen Commit-SHA
+  (`v4.2.0`) ein, baut beide Architekturen einschließlich Dockerfile-Smoke-
+  Tests und startet nur auf `amd64` einen isolierten Container ohne Socket,
+  Secrets oder produktive Mounts. Das wiederverwendbare Trivy-Skript scannt
+  Repositorydateisystem/Konfiguration und die tatsächlich gebauten
+  `amd64`-/`arm64`-Artefakte. Ungeklärte `HIGH`- oder `CRITICAL`-Befunde
+  blockieren; `MEDIUM` und niedriger werden berichtet. Ein Herstellerpatch-
+  mangel ist kein Ignore-Grund.
+- **SoSeBaMa-Abgrenzung:** React, Vite, NestJS, TypeScript, Prisma, Vitest,
+  Playwright, Testcontainers, Zod, Dexie, PDF.js, `react-konva`, `pg-boss`
+  und qpdf werden nicht global installiert, sondern später im SoSeBaMa-
+  Repository oder in dedizierten Anwendungs-/Prüfimages fixiert.
+- **Abschlusskriterien:** Lokale Repository-, Shell-, Link-, Action-,
+  Publication- und `git diff --check`-Gates sind erfolgreich; PR-CI weist
+  beide Architekturen, Runtime-Smoke und alle Trivy-Scans nach; keine ungeklärten
+  `HIGH`-/`CRITICAL`-Befunde; `TASK-RESULT.md` ist wahrheitsgemäß. Der Task
+  endet höchstens mit `READY_FOR_REVIEW`; `COMPLETED` ist erst nach
+  menschlicher Abnahme und Merge zulässig.
+- **Rollback / Abbruchstrategie:** Bei nicht ausführbarer Prüfung oder einem
+  nicht sicher behebbaren `HIGH`-/`CRITICAL`-Befund MIG-017 auf `BLOCKED`
+  setzen, Befund und betroffene Schicht dokumentieren und keine Ignore-Regel
+  einführen. Ein Rollback setzt den vorherigen freigegebenen Basis-/Image-
+  Digest ein; produktive Systeme, Secrets und persistente Daten bleiben
+  unangetastet.

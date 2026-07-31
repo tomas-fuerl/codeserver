@@ -230,7 +230,49 @@ gepflegt und nicht in README, Issues, Pull Requests oder Logs kopiert. Der
 gesamte GitHub-CLI-Konfigurationsbereich bleibt lokaler, sensibler
 Betreiberzustand im persistenten `/config`-Mount.
 
-## 9. Reverse Proxy
+## 9. SoSeBaMa-CLI und Sicherheitsgrenze
+
+MIG-017 stellt im Image für `amd64` und `arm64` ausschließlich systemweite
+CLIs bereit: pnpm `11.4.0`, PostgreSQL-Client `18.4-1.pgdg24.04+1`, Docker
+CLI `5:29.7.0-1~ubuntu.24.04~noble`, Compose V2
+`5.3.1-1~ubuntu.24.04~noble`, Buildx `0.36.0-1~ubuntu.24.04~noble` und Trivy
+`0.72.0`. Die Quellen, Keyring-Fingerprints und Prüfsummen stehen im
+Dockerfile und in `README.md`.
+
+Der Container enthält keinen `docker-ce`-/`docker.io`-Daemon, kein `dockerd`,
+kein `containerd`, keine Docker-Gruppe, keine zusätzlichen Capabilities und
+keinen `/var/run/docker.sock`. Die folgenden Befehle sind im laufenden
+Container daemonlos möglich und dürfen keinen Socket-Mount voraussetzen:
+
+```bash
+node --version
+pnpm --version
+psql --version
+pg_isready --version
+pg_dump --version
+pg_restore --version
+docker --version
+docker compose version
+docker buildx version
+trivy --version
+test ! -S /var/run/docker.sock
+! command -v dockerd
+! command -v containerd
+```
+
+Der Trivy-Cache liegt unter `/config/.cache/trivy`; produktive Scanberichte
+oder Secrets gehören nicht in diesen Cache. Der echte Multiarch-Build, der
+isolierte `amd64`-Runtime-Smoke-Test und die Trivy-Dateisystem-,
+Konfigurations- und Image-Scans laufen ausschließlich auf GitHub-hosted
+Runnern. Jeder ungeklärte `HIGH`- oder `CRITICAL`-Befund blockiert den PR;
+`MEDIUM` und niedrigere Befunde werden nur zusammengefasst.
+
+React, Vite, NestJS, TypeScript, Prisma, Vitest, Playwright, Testcontainers,
+Zod, Dexie, PDF.js, `react-konva`, `pg-boss` und qpdf werden nicht global in
+dieses Basisimage installiert. Diese Abhängigkeiten werden im SoSeBaMa-
+Repository oder in dedizierten Anwendungs-/Prüfimages fixiert.
+
+## 10. Reverse Proxy
 
 Der öffentliche Vertrag lautet ausschließlich:
 
@@ -243,7 +285,7 @@ DSM hält Domain, Zertifikat, WebSocket- und Firewallkonfiguration lokal.
 Direkter externer Zugriff auf den veröffentlichten Containerport ist nicht Teil
 des Vertrags.
 
-## 10. Verifikation
+## 11. Verifikation
 
 Nach einem späteren Deployment werden als `EXTERNAL OPERATOR ACTION` geprüft:
 
@@ -264,7 +306,7 @@ Die Repositoryprüfung `scripts/verify-installation.sh --runtime` wird nur aus
 einem ausgecheckten Repository und mit ausdrücklich freigegebenem Dockerzugriff
 gestartet; sie wird nicht innerhalb des Images ausgeführt.
 
-## 11. Rollback
+## 12. Rollback
 
 Bei einem fehlgeschlagenen späteren Cutover:
 
