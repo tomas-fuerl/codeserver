@@ -98,6 +98,8 @@ done
 printf 'Trivy findings: CRITICAL=%d HIGH=%d MEDIUM=%d LOW=%d UNKNOWN=%d\n' \
   "$critical_count" "$high_count" "$medium_count" "$low_count" "$unknown_count"
 if (( critical_count + high_count > 0 )); then
+  printf '%s\n' 'Trivy HIGH/CRITICAL metadata (secret matches are never printed):' >&2
+  jq -r '.Results[]? as $result | ($result.Vulnerabilities[]?, $result.Misconfigurations[]?, $result.Secrets[]?) | select(.Severity == "HIGH" or .Severity == "CRITICAL") | [ .Severity, (.VulnerabilityID // .ID // .RuleID // "unknown"), (.PkgName // ""), ($result.Target // ""), (.Title // "") ] | @tsv' "$report_file" >&2
   printf '%s\n' 'Trivy scan blocked: unresolved HIGH/CRITICAL findings.' >&2
   exit 1
 fi
