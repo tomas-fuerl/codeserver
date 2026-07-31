@@ -458,3 +458,33 @@ Deployment ausgeführt. Der Betreiberbeleg enthält keine Tokens oder
 `hosts.yml`-Inhalte. Damit sind Runtime-, Health-, Konfigurationspfad-,
 Neustart- und Anmeldepersistenzprüfung erfüllt; EXT-013 blockiert MIG-016 nicht
 mehr.
+
+## EXT-014: Eigentümerentscheidung zu MIG-017-Trivy-Befunden
+
+- **Status:** PENDING
+- **Zugehöriger Task:** MIG-017
+- **Verantwortlich:** Repository-Eigentümer
+- **Warum extern:** Die Freigabe einer Scope-/Versionsänderung oder eines
+  Abbruchs nach ungeklärten `HIGH`-/`CRITICAL`-Befunden ist eine
+  Eigentümerentscheidung außerhalb des lokalen Arbeitsbaums.
+- **Voraussetzungen:** MIG-017 ist `BLOCKED`; PR-CI-Run `30619149586` und der
+  redigierte Befundbericht mit `CRITICAL=3`, `HIGH=94`, `MEDIUM=1148`,
+  `LOW=135`, `UNKNOWN=5` liegen vor; es wurde keine Ignore-Regel eingeführt.
+- **Exakte Schritte:** Die Befundmetadaten (Pakete, CVEs, Zielschichten und
+  verfügbare Fixversionen) prüfen und genau eine Entscheidung dokumentieren:
+  (a) sichere, offiziell veröffentlichte Fixpins beziehungsweise eine
+  ausdrücklich freigegebene Scope-/Kompatibilitätsänderung; (b) weitere
+  Remediation mit neuem Nachweis; oder (c) Abbruch von MIG-017. Keine
+  `.trivyignore`, Suppression oder Severity-Herabstufung freigeben.
+- **Erwartetes Ergebnis:** Eine datierte, verantwortete Entscheidung mit
+  ausgewählten Versionen/Scope oder Abbruchgrund liegt vor. MIG-017 darf erst
+  nach neuer grüner PR-CI höchstens `READY_FOR_REVIEW` erreichen.
+- **Benötigter Nachweis:** Redigierter Beschluss mit CVE-/Paketbezug,
+  Remediation, Risikoakzeptanz (falls überhaupt zulässig) und nächstem Gate;
+  keine Secret-Inhalte oder privaten Infrastrukturwerte.
+- **Rollback:** Bis zur Entscheidung kein Image veröffentlichen, keinen Merge,
+  kein Release, kein Tag und kein Deployment ausführen. Bei verworfener
+  Remediation Branch auf dem letzten sicheren Commit belassen.
+- **Freigabe für Folgetask:** MIG-017 bleibt `BLOCKED`, bis EXT-014 erfüllt und
+  ein erneuter, vollständiger PR-CI-Nachweis ohne ungeklärte `HIGH`-/`CRITICAL`-
+  Befunde vorliegt.

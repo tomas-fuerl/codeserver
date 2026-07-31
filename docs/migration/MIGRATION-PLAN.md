@@ -72,7 +72,7 @@ abgeleitet oder in diese zurückgeschrieben.
 | MIG-014 | Codeserver aus Homelab entfernen | NOT_STARTED | MIG-013, EXT-007 | gegebenenfalls Homelab-PR/Push |
 | MIG-015 | Migration abschließen | NOT_STARTED | MIG-014 | gegebenenfalls finale GitHub-/Betriebsprüfung |
 | MIG-016 | GitHub CLI im code-server-Image bereitstellen | COMPLETED | veröffentlichter Repository-Ausgangsstand | EXT-012 `COMPLETED`, EXT-013 `COMPLETED` |
-| MIG-017 | code-server-Image für SoSeBaMa-Entwicklung vorbereiten | BLOCKED | MIG-016 `COMPLETED` | ungeklärte HIGH/CRITICAL-Befunde im PR-Image-Scan; Eigentümerentscheidung erforderlich |
+| MIG-017 | code-server-Image für SoSeBaMa-Entwicklung vorbereiten | BLOCKED | MIG-016 `COMPLETED`, EXT-014 ausstehend | ungeklärte HIGH/CRITICAL-Befunde im PR-Image-Scan; Eigentümerentscheidung erforderlich |
 
 `PENDING`-Einträge für spätere Tasks blockieren MIG-001 nicht. Sie werden zum
 Gate, sobald ihr zugehöriger Task erreicht wird.
@@ -530,7 +530,8 @@ Gate, sobald ihr zugehöriger Task erreicht wird.
   `HIGH`-/`CRITICAL`-Befunde; `TASK-RESULT.md` ist wahrheitsgemäß. Der Task
   endet höchstens mit `READY_FOR_REVIEW`; `COMPLETED` ist erst nach
   menschlicher Abnahme und Merge zulässig. Der aktuelle Status ist wegen der
-  ungeklärten PR-Imagebefunde `BLOCKED`; eine Eigentümerentscheidung ist offen.
+  ungeklärten PR-Imagebefunde `BLOCKED`; EXT-014 dokumentiert die ausstehende
+  Eigentümerentscheidung.
 - **Rollback / Abbruchstrategie:** Bei nicht ausführbarer Prüfung oder einem
   nicht sicher behebbaren `HIGH`-/`CRITICAL`-Befund MIG-017 auf `BLOCKED`
   setzen, Befund und betroffene Schicht dokumentieren und keine Ignore-Regel
