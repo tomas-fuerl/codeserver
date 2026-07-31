@@ -154,57 +154,237 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          umask 077
           config_dir="$(mktemp -d "${RUNNER_TEMP}/codeserver-config.XXXXXX")"
           secret_file="$(mktemp "${RUNNER_TEMP}/codeserver-secret.XXXXXX")"
           log_file="$(mktemp "${RUNNER_TEMP}/codeserver-log.XXXXXX")"
           container_name=codeserver-normal-smoke
           puid=1234
           pgid=1234
+          runner_uid="$(id -u)"
+          runner_gid="$(id -g)"
+
+          redact_stream() {
+            python3 -c '
+          import sys
+          from pathlib import Path
+          secret = Path(sys.argv[1]).read_text(encoding="utf-8").strip()
+          data = sys.stdin.read()
+          if secret:
+              data = data.replace(secret, "[REDACTED]")
+          sys.stdout.write(data)
+          ' "$secret_file"
+          }
+
+          diagnose_runtime() {
+            printf '%s\n' '--- container state ---' >&2
+            docker inspect \
+              --format 'status={{.State.Status}} running={{.State.Running}} exit={{.State.ExitCode}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' \
+              "$container_name" >&2 2>/dev/null || true
+            printf '%s\n' '--- health history ---' >&2
+            docker inspect \
+              --format '{{if .State.Health}}{{range .State.Health.Log}}{{printf "end=%s exit=%d output=%q\n" .End .ExitCode .Output}}{{end}}{{else}}healthcheck missing{{end}}' \
+              "$container_name" 2>/dev/null | redact_stream >&2 || true
+            printf '%s\n' '--- redacted container logs ---' >&2
+            docker logs "$container_name" 2>&1 | redact_stream >&2 || true
+          }
+
           cleanup() {
+            local test_status=$?
+            local cleanup_failed=0
+            trap - EXIT
+            set +e
+
             docker rm --force "$container_name" >/dev/null 2>&1 || true
-            rm -rf -- "$config_dir" "$secret_file" "$log_file"
+
+            if [[ -d "$config_dir" ]]; then
+              if ! docker run --rm --network none --user root \
+                --entrypoint /bin/bash \
+                --volume "$config_dir:/config" \
+                codeserver-ci:amd64 \
+                -Eeuo pipefail -c \
+                'find /config -mindepth 1 -delete && chown "$1:$2" /config' \
+                cleanup "$runner_uid" "$runner_gid" >/dev/null; then
+                printf '%s\n' \
+                  'Cleanup warning: failed to empty or restore ownership of the config directory.' \
+                  >&2
+                cleanup_failed=1
+              fi
+            fi
+
+            if ! rm -rf -- "$config_dir" "$secret_file" "$log_file"; then
+              printf '%s\n' 'Cleanup warning: failed to remove temporary test files.' >&2
+              cleanup_failed=1
+            fi
+
+            if (( test_status == 0 && cleanup_failed != 0 )); then
+              test_status=1
+            fi
+            exit "$test_status"
           }
           trap cleanup EXIT
-          umask 077
+
+          wait_healthy() {
+            local attempt container_state health_status
+            for attempt in $(seq 1 90); do
+              container_state="$(
+                docker inspect --format '{{.State.Status}}' "$container_name" 2>/dev/null || true
+              )"
+              health_status="$(
+                docker inspect \
+                  --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' \
+                  "$container_name" 2>/dev/null || true
+              )"
+
+              case "$container_state" in
+                running) ;;
+                "")
+                  printf '%s\n' 'Runtime test failed: container is missing.' >&2
+                  diagnose_runtime
+                  return 1
+                  ;;
+                *)
+                  printf 'Runtime test failed: container state is %s.\n' "$container_state" >&2
+                  diagnose_runtime
+                  return 1
+                  ;;
+              esac
+
+              case "$health_status" in
+                healthy)
+                  return 0
+                  ;;
+                starting)
+                  sleep 1
+                  ;;
+                unhealthy)
+                  printf '%s\n' 'Runtime test failed: container is unhealthy.' >&2
+                  diagnose_runtime
+                  return 1
+                  ;;
+                missing|"")
+                  printf '%s\n' 'Runtime test failed: Docker healthcheck is missing.' >&2
+                  diagnose_runtime
+                  return 1
+                  ;;
+                *)
+                  printf 'Runtime test failed: unexpected health status %s.\n' \
+                    "$health_status" >&2
+                  diagnose_runtime
+                  return 1
+                  ;;
+              esac
+            done
+
+            printf '%s\n' 'Runtime test failed: healthcheck timeout.' >&2
+            diagnose_runtime
+            return 1
+          }
+
+          verify_listener_uid() {
+            local listener_output listener_pid listener_uid
+            local -a listener_pids=()
+
+            if ! listener_output="$(
+              docker exec "$container_name" \
+                lsof -nP -t -iTCP:8443 -sTCP:LISTEN 2>&1
+            )"; then
+              printf '%s\n' 'Runtime test failed: no TCP/8443 listener was found.' >&2
+              printf '%s\n' "$listener_output" >&2
+              return 1
+            fi
+
+            mapfile -t listener_pids < <(
+              printf '%s\n' "$listener_output" | awk 'NF' | sort -u
+            )
+            if (( ${#listener_pids[@]} != 1 )); then
+              printf 'Runtime test failed: expected one TCP/8443 listener PID, found %d: %s\n' \
+                "${#listener_pids[@]}" "${listener_pids[*]:-none}" >&2
+              return 1
+            fi
+
+            listener_pid="${listener_pids[0]}"
+            [[ "$listener_pid" =~ ^[0-9]+$ ]] || {
+              printf 'Runtime test failed: invalid listener PID %s.\n' "$listener_pid" >&2
+              return 1
+            }
+
+            listener_uid="$(
+              docker exec "$container_name" \
+                ps -o uid= -p "$listener_pid" | tr -d '[:space:]'
+            )"
+            [[ "$listener_uid" =~ ^[0-9]+$ ]] || {
+              printf 'Runtime test failed: invalid listener UID %s.\n' \
+                "${listener_uid:-empty}" >&2
+              return 1
+            }
+            [[ "$listener_uid" == "$puid" ]] || {
+              printf 'Runtime test failed: listener UID %s does not equal PUID %s.\n' \
+                "$listener_uid" "$puid" >&2
+              return 1
+            }
+            [[ "$listener_uid" != 0 ]] || {
+              printf '%s\n' 'Runtime test failed: listener runs as root.' >&2
+              return 1
+            }
+
+            printf 'TCP/8443 listener PID=%s UID=%s\n' "$listener_pid" "$listener_uid"
+          }
+
+          assert_secret_absent_from_logs() {
+            docker logs "$container_name" >"$log_file" 2>&1
+            python3 - "$secret_file" "$log_file" <<'PYSECRET'
+          from pathlib import Path
+          import sys
+
+          secret = Path(sys.argv[1]).read_text(encoding="utf-8").strip()
+          logs = Path(sys.argv[2]).read_text(encoding="utf-8", errors="replace")
+          if not secret:
+              raise SystemExit("synthetic secret file is empty")
+          if secret in logs:
+              raise SystemExit("synthetic hashed password was exposed in container logs")
+          PYSECRET
+          }
+
           docker run --rm --entrypoint /bin/bash codeserver-ci:amd64 -c \
-            "printf '%s' synthetic-password | argon2 synthetic-salt -id -t 1 -m 8 -p 1 -l 16 -e" >"$secret_file"
+            "printf '%s' synthetic-password | argon2 synthetic-salt -id -t 1 -m 8 -p 1 -l 16 -e" \
+            >"$secret_file"
           chmod 600 "$secret_file"
+
           docker run --detach --name "$container_name" --network none \
             --env PUID="$puid" --env PGID="$pgid" --env TZ=Etc/UTC \
             --env FILE__HASHED_PASSWORD=/run/secrets/hashed_password \
+            --health-cmd='curl --fail --silent --show-error http://127.0.0.1:8443/healthz >/dev/null || exit 1' \
+            --health-interval=1s \
+            --health-timeout=3s \
+            --health-retries=90 \
+            --health-start-period=2s \
             --volume "$config_dir:/config" \
             --volume "$secret_file:/run/secrets/hashed_password:ro" \
             codeserver-ci:amd64 >/dev/null
-          wait_healthy() {
-            local attempt status
-            for attempt in $(seq 1 90); do
-              status="$(docker inspect --format '{{.State.Health.Status}}' "$container_name" 2>/dev/null || true)"
-              [[ "$status" == healthy ]] && return 0
-              sleep 1
-            done
-            docker logs "$container_name" >&2 || true
-            return 1
-          }
+
           wait_healthy
-          docker exec "$container_name" curl --fail --silent http://127.0.0.1:8443/healthz >/dev/null
+          docker exec "$container_name" \
+            curl --fail --silent --show-error http://127.0.0.1:8443/healthz \
+            >/dev/null
           test "$(docker exec "$container_name" stat -c '%u:%g' /config)" = "$puid:$pgid"
           docker exec "$container_name" sh -c 'printf marker > /config/restart-marker'
           test "$(docker exec "$container_name" cat /config/restart-marker)" = marker
-          app_uid="$(docker exec "$container_name" ps -eo uid=,args= | awk '/[c]ode-server/ {print $1; exit}' | tr -d ' ' )"
-          test "$app_uid" = "$puid"
-          ! docker exec "$container_name" sh -c 'ps -eo args= | grep -E "(^|/)(dockerd|containerd)( |$)"'
+          verify_listener_uid
+          ! docker exec "$container_name" \
+            sh -c 'ps -eo args= | grep -E "(^|/)(dockerd|containerd)( |$)"'
           ! docker exec "$container_name" test -S /var/run/docker.sock
-          docker logs "$container_name" >"$log_file" 2>&1
-          ! grep -Fq "$(tr -d '\n' <"$secret_file")" "$log_file"
+          assert_secret_absent_from_logs
+
           docker restart "$container_name" >/dev/null
           wait_healthy
-          docker exec "$container_name" curl --fail --silent http://127.0.0.1:8443/healthz >/dev/null
+          docker exec "$container_name" \
+            curl --fail --silent --show-error http://127.0.0.1:8443/healthz \
+            >/dev/null
           test "$(docker exec "$container_name" cat /config/restart-marker)" = marker
           test "$(docker exec "$container_name" stat -c '%u:%g' /config)" = "$puid:$pgid"
-          app_uid="$(docker exec "$container_name" ps -eo uid=,args= | awk '/[c]ode-server/ {print $1; exit}' | tr -d ' ' )"
-          test "$app_uid" = "$puid"
-          docker logs "$container_name" >>"$log_file" 2>&1
-          ! grep -Fq "$(tr -d '\n' <"$secret_file")" "$log_file"
+          verify_listener_uid
+          assert_secret_absent_from_logs
 
       - name: Prepare Trivy report directory
         if: always()
@@ -212,6 +392,7 @@ jobs:
         run: mkdir -p "${RUNNER_TEMP}/trivy-reports"
 
       - name: Trivy filesystem and configuration scan
+        if: ${{ !cancelled() }}
         id: trivy_filesystem
         continue-on-error: true
         shell: bash
@@ -223,6 +404,7 @@ jobs:
           exit "$status"
 
       - name: Trivy amd64 image scan
+        if: ${{ !cancelled() }}
         id: trivy_amd64
         continue-on-error: true
         shell: bash
@@ -234,6 +416,7 @@ jobs:
           exit "$status"
 
       - name: Trivy arm64 image scan
+        if: ${{ !cancelled() }}
         id: trivy_arm64
         continue-on-error: true
         shell: bash
