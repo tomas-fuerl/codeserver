@@ -168,10 +168,10 @@ jobs:
             python3 -c '
           import sys
           from pathlib import Path
-          secret = Path(sys.argv[1]).read_text(encoding="utf-8").strip()
+          synthetic_hash = Path(sys.argv[1]).read_text(encoding="utf-8").strip()
           data = sys.stdin.read()
-          if secret:
-              data = data.replace(secret, "[REDACTED]")
+          if synthetic_hash:
+              data = data.replace(synthetic_hash, "[REDACTED]")
           sys.stdout.write(data)
           ' "$secret_file"
           }
@@ -337,11 +337,11 @@ jobs:
           from pathlib import Path
           import sys
 
-          secret = Path(sys.argv[1]).read_text(encoding="utf-8").strip()
+          synthetic_hash = Path(sys.argv[1]).read_text(encoding="utf-8").strip()
           logs = Path(sys.argv[2]).read_text(encoding="utf-8", errors="replace")
-          if not secret:
+          if not synthetic_hash:
               raise SystemExit("synthetic secret file is empty")
-          if secret in logs:
+          if synthetic_hash in logs:
               raise SystemExit("synthetic hashed password was exposed in container logs")
           PYSECRET
           }
