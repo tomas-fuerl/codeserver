@@ -252,7 +252,7 @@ for required_reference in (
     "ARG DOCKER_BUILDX_VERSION=0.36.0-1~ubuntu.24.04~noble",
     "ARG TRIVY_VERSION=0.72.0",
     "ARG POWERSHELL_VERSION=7.6.4",
-    "ARG CODEX_VERSION=\"0.146.0\"",
+    "ARG CODEX_VERSION=\"0.144.5\"",
     "https://nodejs.org/dist/v${NODE_VERSION}/${NODE_ARCHIVE}",
     "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt",
     "https://github.com/PowerShell/PowerShell/releases/download/v${POWERSHELL_VERSION}/${PWSH_ARCHIVE}",

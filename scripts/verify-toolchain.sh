@@ -13,7 +13,7 @@ EXPECTED_COMPOSE_PREFIX="Docker Compose version v5.3.1"
 EXPECTED_BUILDX_PREFIX="github.com/docker/buildx v0.36.0"
 EXPECTED_TRIVY_PREFIX="Version: 0.72.0"
 EXPECTED_POWERSHELL="PowerShell 7.6.4"
-EXPECTED_CODEX="codex-cli 0.146.0"
+EXPECTED_CODEX="codex-cli 0.144.5"
 
 check_exact() {
   local name="$1"

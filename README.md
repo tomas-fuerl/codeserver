@@ -52,7 +52,7 @@ des Builds.
 | Node.js | `24.18.1` (unverändert) | nodejs.org-Archiv und `SHASUMS256.txt` |
 | GitHub CLI | `2.97.0` | offizielles GitHub-Releasearchiv, Checksummenlisten-Asset SHA-256 `61905c69ec8660f310814ec98395cdd0c2d07aabf024c597ec45813984a02334` |
 | PowerShell | `7.6.4` | offizielles PowerShell-Releasearchiv, architekturspezifische SHA-256-Prüfsummen |
-| Codex CLI | `0.146.0` | offizielles npm-Paket `@openai/codex@0.146.0` |
+| Codex CLI | `0.144.5` | offizielles npm-Paket `@openai/codex@0.144.5` |
 | pnpm | `11.19.0` | npm-Paket `pnpm@11.19.0`, Registry-Integrity `sha512-eIHz7VkNRyxKlV4riLISF5ERYGbcyIy8o4SeybYPG7qm0syyIfqR2k4cZb7yvL43k2Wup6xTnHv4be3DobItzg==` |
 | PostgreSQL-Client | `18.4-1.pgdg24.04+1` | offizielles PGDG-Repository, Fingerprint `B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8`, `signed-by`-Keyring |
 | Docker CLI | `5:29.7.0-1~ubuntu.24.04~noble` | offizielles Docker-Repository, Fingerprint `9DC858229FC7DD38854AE2D88D81803C0EBFCD88`, `signed-by`-Keyring |
