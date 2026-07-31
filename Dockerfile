@@ -324,3 +324,6 @@ RUN set -e \
     && unzip -v \
     && zip -v >/dev/null \
     && echo "Alle Build-Werkzeuge wurden erfolgreich geprüft."
+
+# Der Laufzeitcontainer bleibt beim unprivilegierten LinuxServer-Benutzer.
+USER abc
