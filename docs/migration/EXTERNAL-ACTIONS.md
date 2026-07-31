@@ -461,30 +461,29 @@ mehr.
 
 ## EXT-014: Eigentümerentscheidung zu MIG-017-Trivy-Befunden
 
-- **Status:** PENDING
+- **Status:** COMPLETED
 - **Zugehöriger Task:** MIG-017
 - **Verantwortlich:** Repository-Eigentümer
-- **Warum extern:** Die Freigabe einer Scope-/Versionsänderung oder eines
-  Abbruchs nach ungeklärten `HIGH`-/`CRITICAL`-Befunden ist eine
-  Eigentümerentscheidung außerhalb des lokalen Arbeitsbaums.
-- **Voraussetzungen:** MIG-017 ist `BLOCKED`; PR-CI-Run `30619149586` und der
-  redigierte Befundbericht mit `CRITICAL=3`, `HIGH=94`, `MEDIUM=1148`,
-  `LOW=135`, `UNKNOWN=5` liegen vor; es wurde keine Ignore-Regel eingeführt.
-- **Exakte Schritte:** Die Befundmetadaten (Pakete, CVEs, Zielschichten und
-  verfügbare Fixversionen) prüfen und genau eine Entscheidung dokumentieren:
-  (a) sichere, offiziell veröffentlichte Fixpins beziehungsweise eine
-  ausdrücklich freigegebene Scope-/Kompatibilitätsänderung; (b) weitere
-  Remediation mit neuem Nachweis; oder (c) Abbruch von MIG-017. Keine
-  `.trivyignore`, Suppression oder Severity-Herabstufung freigeben.
-- **Erwartetes Ergebnis:** Eine datierte, verantwortete Entscheidung mit
-  ausgewählten Versionen/Scope oder Abbruchgrund liegt vor. MIG-017 darf erst
-  nach neuer grüner PR-CI höchstens `READY_FOR_REVIEW` erreichen.
-- **Benötigter Nachweis:** Redigierter Beschluss mit CVE-/Paketbezug,
-  Remediation, Risikoakzeptanz (falls überhaupt zulässig) und nächstem Gate;
-  keine Secret-Inhalte oder privaten Infrastrukturwerte.
-- **Rollback:** Bis zur Entscheidung kein Image veröffentlichen, keinen Merge,
-  kein Release, kein Tag und kein Deployment ausführen. Bei verworfener
-  Remediation Branch auf dem letzten sicheren Commit belassen.
-- **Freigabe für Folgetask:** MIG-017 bleibt `BLOCKED`, bis EXT-014 erfüllt und
-  ein erneuter, vollständiger PR-CI-Nachweis ohne ungeklärte `HIGH`-/`CRITICAL`-
-  Befunde vorliegt.
+- **Entscheidungsdatum:** 2026-07-31 (UTC)
+- **Entscheidung:** Es gibt keine pauschale Ausnahme für tatsächliche
+  `HIGH`- oder `CRITICAL`-Schwachstellen. Sichere Patch- und Minor-Updates
+  innerhalb der bereits angenommenen Hauptversionen sind zur Behebung
+  nachgewiesener Befunde erlaubt. Die Dockerfile-Anweisung `USER abc` wird
+  zurückgenommen. Für den Trivy-Misconfiguration-Befund `AVD-DS-0002` wird
+  genau eine befristete Ausnahme bis einschließlich `2026-10-31` genehmigt.
+- **Geltungsbereich:** Die Ausnahme gilt ausschließlich für den
+  LinuxServer-s6-Initvertrag. Keine CVE-, GHSA-, Secret- oder weitere
+  Misconfiguration-ID darf durch diese Entscheidung ignoriert werden. Die
+  versionierte Ausnahme steht ausschließlich in `.trivyignore.yaml` und wird
+  durch den Repositoryvalidator auf genau diese ID und dieses Ablaufdatum
+  begrenzt.
+- **Statusregel:** MIG-017 bleibt `BLOCKED`, solange ungeklärte tatsächliche
+  `HIGH`- oder `CRITICAL`-Befunde vorhanden sind. `COMPLETED` ist weiterhin
+  erst nach menschlicher Abnahme und Merge zulässig.
+- **Nachweis:** `.trivyignore.yaml`, Entfernen von `USER abc`, erneute
+  s6-/PUID-/PGID-Laufzeitprüfung und unabhängige AMD64-/ARM64-Trivy-Gates im
+  Review-Commit. Die Ausnahme ist keine Vulnerability- oder Secret-Suppression.
+- **Rollback:** Ausnahme vor Ablauf entfernen, falls LinuxServer den
+  s6-Initvertrag ändert; bei Ablauf oder unerwarteten IDs schlägt der
+  Repositoryvalidator fehl. Keine produktive Konfiguration, kein Secret und
+  kein Deployment ist betroffen.

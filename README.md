@@ -49,13 +49,18 @@ des Builds.
 
 | Werkzeug | Exakte Version | Offizielle Quelle und Integritätsnachweis |
 | --- | --- | --- |
-| Node.js | `24.18.0` (unverändert) | nodejs.org-Archiv und `SHASUMS256.txt` |
-| pnpm | `11.4.0` | npm-Paket `pnpm@11.4.0`, Registry-Integrity `sha512-8P68fjdVKrSFSUqRQkGzOOCzWAuT1UzjHwCTMBWICGMSkDihtK5OQUoO5jrDW/IRl+mQFyxKaCVkULVjYxCWjw==` |
+| Node.js | `24.18.1` (unverändert) | nodejs.org-Archiv und `SHASUMS256.txt` |
+| GitHub CLI | `2.97.0` | offizielles GitHub-Releasearchiv, Checksummenlisten-Asset SHA-256 `61905c69ec8660f310814ec98395cdd0c2d07aabf024c597ec45813984a02334` |
+| PowerShell | `7.6.4` | offizielles PowerShell-Releasearchiv, architekturspezifische SHA-256-Prüfsummen |
+| Codex CLI | `0.146.0` | offizielles npm-Paket `@openai/codex@0.146.0` |
+| pnpm | `11.19.0` | npm-Paket `pnpm@11.19.0`, Registry-Integrity `sha512-eIHz7VkNRyxKlV4riLISF5ERYGbcyIy8o4SeybYPG7qm0syyIfqR2k4cZb7yvL43k2Wup6xTnHv4be3DobItzg==` |
 | PostgreSQL-Client | `18.4-1.pgdg24.04+1` | offizielles PGDG-Repository, Fingerprint `B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8`, `signed-by`-Keyring |
 | Docker CLI | `5:29.7.0-1~ubuntu.24.04~noble` | offizielles Docker-Repository, Fingerprint `9DC858229FC7DD38854AE2D88D81803C0EBFCD88`, `signed-by`-Keyring |
 | Compose V2 | `5.3.1-1~ubuntu.24.04~noble` | dasselbe Docker-Repository und derselbe signierte Paketindex |
 | Buildx | `0.36.0-1~ubuntu.24.04~noble` | dasselbe Docker-Repository und derselbe signierte Paketindex |
 | Trivy | `0.72.0` | offizielles Aqua-Security-Archiv, geprüfte Checksummenliste und architekturspezifische SHA-256-Prüfsumme |
+
+Der normale LinuxServer-Startvertrag bleibt erhalten: LinuxServer startet den s6-Initprozess entsprechend dem Basisimagevertrag und wendet dabei `PUID`/`PGID` an. Der code-server-Dienst läuft nach dieser Initialisierung mit der festgelegten Nicht-Root-UID. Der Root-Initprozess erhält keinen Docker-Socket, keine zusätzlichen Capabilities und keinen privilegierten Modus; der Dienstzugriff bleibt auf explizite Mounts und Containergrenzen beschränkt.
 
 PGDG- und Docker-Pakete sind für Ubuntu Noble auf `amd64` und `arm64`
 verfügbar. Trivy verwendet `/config/.cache/trivy`; dort liegen keine

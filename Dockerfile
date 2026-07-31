@@ -2,12 +2,12 @@ FROM lscr.io/linuxserver/code-server:4.131.0-ls354@sha256:621d47575a19645f4267f6
 LABEL org.opencontainers.image.source="https://github.com/tomas-fuerl/codeserver"
 
 ARG TARGETARCH
-ARG NODE_VERSION=24.18.0
-ARG GH_VERSION=2.96.0
-ARG PNPM_VERSION=11.4.0
-ARG PNPM_SHA512=f0febc7e37552ab485494a914241b338e0b3580b93d54ce31f00933015880863129038a1b4ae4e414a0ee63ac35bf21197e990172c4a68256450b5636310968f
-ARG POWERSHELL_VERSION=7.6.3
-ARG CODEX_VERSION="0.144.5"
+ARG NODE_VERSION=24.18.1
+ARG GH_VERSION=2.97.0
+ARG PNPM_VERSION=11.19.0
+ARG PNPM_SHA512=7881f3ed590d472c4a955e2b88b2121791116066dcc88cbca3849ec9b60f1bbaa6d2ccb221fa91da4e1c65bef2bcbe379365aea7ac539c7bf86dedc3a1b22dce
+ARG POWERSHELL_VERSION=7.6.4
+ARG CODEX_VERSION="0.146.0"
 ARG PG_CLIENT_VERSION=18.4-1.pgdg24.04+1
 ARG DOCKER_CLI_VERSION=5:29.7.0-1~ubuntu.24.04~noble
 ARG DOCKER_COMPOSE_VERSION=5.3.1-1~ubuntu.24.04~noble
@@ -137,7 +137,7 @@ RUN BUILD_ARCH="${TARGETARCH:-$(dpkg --print-architecture)}" \
     esac \
     && GH_ARCHIVE="gh_${GH_VERSION}_linux_${GH_ARCH}.tar.gz" \
     && GH_CHECKSUMS="gh_${GH_VERSION}_checksums.txt" \
-    && GH_CHECKSUMS_SHA256="fc046371efa250e2875208341a786a35a01717d5eebec6903e199a9b8a3f3565" \
+    && GH_CHECKSUMS_SHA256="61905c69ec8660f310814ec98395cdd0c2d07aabf024c597ec45813984a02334" \
     && curl --fail --show-error --location --retry 3 \
         --output "/tmp/${GH_ARCHIVE}" \
         "https://github.com/cli/cli/releases/download/v${GH_VERSION}/${GH_ARCHIVE}" \
@@ -183,11 +183,11 @@ RUN BUILD_ARCH="${TARGETARCH:-$(dpkg --print-architecture)}" \
     && case "${BUILD_ARCH}" in \
         amd64) \
             PWSH_ARCH="x64"; \
-            PWSH_SHA256="856D0765D2332377F9D7A4AEA76EFDFDE4DE51446E7738DDE2DFDA41DBA9E2A7" \
+            PWSH_SHA256="4471b5a36bfe86ec7af8525d36bb1cacba0128e7aac22d05cc064bc00e604721" \
             ;; \
         arm64) \
             PWSH_ARCH="arm64"; \
-            PWSH_SHA256="7A14A385ECA7DC5BEDC1C8AA3D8B765F449ADA30AABE5785A9FD331266EB062D" \
+            PWSH_SHA256="d4ef2382fa452f2ccbdb48a01adbbce9ed64954872123970c16be6d086d1224b" \
             ;; \
         *) echo "Nicht unterstützte Architektur: ${BUILD_ARCH}" >&2; exit 1 ;; \
     esac \
@@ -324,6 +324,3 @@ RUN set -e \
     && unzip -v \
     && zip -v >/dev/null \
     && echo "Alle Build-Werkzeuge wurden erfolgreich geprüft."
-
-# Der Laufzeitcontainer bleibt beim unprivilegierten LinuxServer-Benutzer.
-USER abc

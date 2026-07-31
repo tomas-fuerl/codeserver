@@ -233,7 +233,7 @@ Betreiberzustand im persistenten `/config`-Mount.
 ## 9. SoSeBaMa-CLI und Sicherheitsgrenze
 
 MIG-017 stellt im Image für `amd64` und `arm64` ausschließlich systemweite
-CLIs bereit: pnpm `11.4.0`, PostgreSQL-Client `18.4-1.pgdg24.04+1`, Docker
+CLIs bereit: pnpm `11.19.0`, PostgreSQL-Client `18.4-1.pgdg24.04+1`, Docker
 CLI `5:29.7.0-1~ubuntu.24.04~noble`, Compose V2
 `5.3.1-1~ubuntu.24.04~noble`, Buildx `0.36.0-1~ubuntu.24.04~noble` und Trivy
 `0.72.0`. Die Quellen, Keyring-Fingerprints und Prüfsummen stehen im
@@ -242,6 +242,8 @@ Dockerfile und in `README.md`.
 Der Container enthält keinen `docker-ce`-/`docker.io`-Daemon, kein `dockerd`,
 kein `containerd`, keine Docker-Gruppe, keine zusätzlichen Capabilities und
 keinen `/var/run/docker.sock`. Die folgenden Befehle sind im laufenden
+Der LinuxServer-s6-Initprozess startet gemäß Basisimagevertrag und wendet `PUID`/`PGID` an. Der code-server-Dienst läuft danach mit der festgelegten Nicht-Root-UID; Root-Initprozess und Dienst erhalten keinen Docker-Socket, keine zusätzlichen Capabilities und keinen privilegierten Modus. Der Zugriff bleibt auf explizite Mounts und Containergrenzen beschränkt.
+
 Container daemonlos möglich und dürfen keinen Socket-Mount voraussetzen:
 
 ```bash

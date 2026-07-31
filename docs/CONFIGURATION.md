@@ -19,8 +19,8 @@ Die systemweite Toolchain ist kein Compose- oder Secret-Wert. Sie ist im
 Dockerfile exakt gepinnt und wird auf Ubuntu Noble für `amd64` und `arm64`
 gebaut:
 
-- Node.js bleibt `24.18.0`; pnpm ist exakt `11.4.0` und wird als offizielles
-  npm-Paket mit der Registry-Integrity `sha512-8P68fjdVKrSFSUqRQkGzOOCzWAuT1UzjHwCTMBWICGMSkDihtK5OQUoO5jrDW/IRl+mQFyxKaCVkULVjYxCWjw==` geprüft.
+- Node.js bleibt `24.18.1`; pnpm ist exakt `11.19.0` und wird als offizielles
+  npm-Paket mit der Registry-Integrity `sha512-eIHz7VkNRyxKlV4riLISF5ERYGbcyIy8o4SeybYPG7qm0syyIfqR2k4cZb7yvL43k2Wup6xTnHv4be3DobItzg==` geprüft.
 - PostgreSQL-Client `18.4-1.pgdg24.04+1` stammt aus PGDG; Docker CLI
   `5:29.7.0-1~ubuntu.24.04~noble`, Compose `5.3.1-1~ubuntu.24.04~noble` und
   Buildx `0.36.0-1~ubuntu.24.04~noble` stammen aus Docker. Beide APT-Quellen
@@ -28,6 +28,8 @@ gebaut:
 - Trivy `0.72.0` stammt aus dem offiziellen Aqua-Security-Releasearchiv. Die
   Checksummenliste und das passende `amd64`-/`arm64`-Archiv werden per
   SHA-256 geprüft.
+
+LinuxServer startet den s6-Initprozess gemäß Basisimagevertrag und wendet `PUID`/`PGID` während der Initialisierung an. Der code-server-Dienst läuft anschließend mit der festgelegten Nicht-Root-UID. Der Root-Initprozess erhält keinen Docker-Socket, keine zusätzlichen Capabilities und keinen privilegierten Modus; der Dienstzugriff bleibt auf die expliziten Mounts und Containergrenzen beschränkt.
 
 Diese Werkzeuge sind ausschließlich CLIs. Der Container enthält keinen Docker-
 Daemon, keine Docker-Gruppe und keinen Docker-Socket; `docker compose` und

@@ -38,7 +38,7 @@ GitHub-CLI-Telemetrie als reproduzierbaren Image-Default. Das OCI-Source-Label
 verweist auf dieses Repository.
 
 MIG-017 erweitert den systemweiten Entwicklungsumfang reproduzierbar:
-`pnpm 11.4.0` wird als npm-Paket mit Registry-Integrity installiert;
+`pnpm 11.19.0` wird als npm-Paket mit Registry-Integrity installiert;
 `postgresql-client-18 18.4-1.pgdg24.04+1` kommt aus dem signierten offiziellen
 PGDG-Repository; Docker CLI `5:29.7.0-1~ubuntu.24.04~noble`, Compose V2
 `5.3.1-1~ubuntu.24.04~noble` und Buildx `0.36.0-1~ubuntu.24.04~noble` kommen
@@ -47,6 +47,8 @@ dem offiziellen Aqua-Security-Archiv mit geprüfter Release-Checksummenliste.
 Alle Pins gelten für Ubuntu Noble auf `amd64` und `arm64`; der Basisdigest
 wurde auf den aktuell veröffentlichten `4.131.0-ls354`-Manifeststand aktualisiert,
 um die erste CI-Befundlage gezielt zu remediieren.
+
+Der LinuxServer-s6-Initprozess wird gemäß dem Basisimagevertrag gestartet und wendet `PUID` und `PGID` während der Initialisierung an. Erst danach läuft der code-server-Anwendungsdienst mit der erwarteten Nicht-Root-UID. Der Initprozess erhält keinen Docker-Socket, keine zusätzlichen Capabilities und keinen privilegierten Modus; der Dienstzugriff bleibt auf die expliziten Mounts und Containergrenzen beschränkt.
 
 Die Werkzeuge sind CLIs. Der Build installiert weder `docker-ce` noch
 `docker.io`, `dockerd`, `containerd` oder `containerd.io`, richtet keine

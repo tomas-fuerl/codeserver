@@ -84,6 +84,7 @@ run_static_checks() {
     Dockerfile
     compose.yaml
     .env.example
+    .trivyignore.yaml
     README.md
     docs/ARCHITECTURE.md
     docs/BACKUP-RESTORE.md
@@ -240,18 +241,18 @@ for blocked_reference in (
 ):
     require(blocked_reference.lower() not in dockerfile.lower(), "Dockerfile enthält eine private oder Beispielreferenz")
 for required_reference in (
-    "ARG NODE_VERSION=24.18.0",
-    "ARG GH_VERSION=2.96.0",
-    "GH_CHECKSUMS_SHA256=\"fc046371efa250e2875208341a786a35a01717d5eebec6903e199a9b8a3f3565\"",
-    "ARG PNPM_VERSION=11.4.0",
-    "PNPM_SHA512=f0febc7e37552ab485494a914241b338e0b3580b93d54ce31f00933015880863129038a1b4ae4e414a0ee63ac35bf21197e990172c4a68256450b5636310968f",
+    "ARG NODE_VERSION=24.18.1",
+    "ARG GH_VERSION=2.97.0",
+    "GH_CHECKSUMS_SHA256=\"61905c69ec8660f310814ec98395cdd0c2d07aabf024c597ec45813984a02334\"",
+    "ARG PNPM_VERSION=11.19.0",
+    "PNPM_SHA512=7881f3ed590d472c4a955e2b88b2121791116066dcc88cbca3849ec9b60f1bbaa6d2ccb221fa91da4e1c65bef2bcbe379365aea7ac539c7bf86dedc3a1b22dce",
     "ARG PG_CLIENT_VERSION=18.4-1.pgdg24.04+1",
     "ARG DOCKER_CLI_VERSION=5:29.7.0-1~ubuntu.24.04~noble",
     "ARG DOCKER_COMPOSE_VERSION=5.3.1-1~ubuntu.24.04~noble",
     "ARG DOCKER_BUILDX_VERSION=0.36.0-1~ubuntu.24.04~noble",
     "ARG TRIVY_VERSION=0.72.0",
-    "ARG POWERSHELL_VERSION=7.6.3",
-    "ARG CODEX_VERSION=\"0.144.5\"",
+    "ARG POWERSHELL_VERSION=7.6.4",
+    "ARG CODEX_VERSION=\"0.146.0\"",
     "https://nodejs.org/dist/v${NODE_VERSION}/${NODE_ARCHIVE}",
     "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt",
     "https://github.com/PowerShell/PowerShell/releases/download/v${POWERSHELL_VERSION}/${PWSH_ARCHIVE}",
@@ -317,6 +318,15 @@ require(
     re.search(r"^\s*ENV TRIVY_CACHE_DIR=/config/\.cache/trivy$", dockerfile, re.MULTILINE) is not None,
     "Trivy-Cache muss unterhalb von /config liegen",
 )
+ignore_file = root / ".trivyignore.yaml"
+require(ignore_file.is_file(), "Trivy-Ausnahmedatei fehlt")
+if ignore_file.is_file():
+    ignore_text = ignore_file.read_text(encoding="utf-8")
+    require(ignore_text.count("misconfigurations:") == 1, "Trivy-Ausnahme muss genau einen Misconfiguration-Block enthalten")
+    require(ignore_text.count("- id: AVD-DS-0002") == 1, "Trivy-Ausnahme muss genau AVD-DS-0002 enthalten")
+    require(ignore_text.count("expired_at: 2026-10-31") == 1, "Trivy-Ausnahme muss exakt am 2026-10-31 ablaufen")
+    require("CVE-" not in ignore_text and "GHSA-" not in ignore_text and "*" not in ignore_text, "Trivy-Ausnahme darf keine CVE/GHSA/Wildcard-Regel enthalten")
+    require("--ignorefile" in (root / "scripts/ci/run-trivy-scan.sh").read_text(encoding="utf-8"), "Trivy-Scanner muss die Ausnahme explizit verwenden")
 
 publication_audit = root / "scripts/security/publication-audit.sh"
 require(

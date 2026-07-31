@@ -72,7 +72,7 @@ abgeleitet oder in diese zurückgeschrieben.
 | MIG-014 | Codeserver aus Homelab entfernen | NOT_STARTED | MIG-013, EXT-007 | gegebenenfalls Homelab-PR/Push |
 | MIG-015 | Migration abschließen | NOT_STARTED | MIG-014 | gegebenenfalls finale GitHub-/Betriebsprüfung |
 | MIG-016 | GitHub CLI im code-server-Image bereitstellen | COMPLETED | veröffentlichter Repository-Ausgangsstand | EXT-012 `COMPLETED`, EXT-013 `COMPLETED` |
-| MIG-017 | code-server-Image für SoSeBaMa-Entwicklung vorbereiten | BLOCKED | MIG-016 `COMPLETED`, EXT-014 ausstehend | ungeklärte HIGH/CRITICAL-Befunde im PR-Image-Scan; Eigentümerentscheidung erforderlich |
+| MIG-017 | code-server-Image für SoSeBaMa-Entwicklung vorbereiten | BLOCKED | MIG-016 `COMPLETED`, EXT-014 `COMPLETED` | ungeklärte tatsächliche HIGH/CRITICAL-Befunde im PR-Image-Scan; Task bleibt BLOCKED |
 
 `PENDING`-Einträge für spätere Tasks blockieren MIG-001 nicht. Sie werden zum
 Gate, sobald ihr zugehöriger Task erreicht wird.
@@ -464,7 +464,7 @@ Gate, sobald ihr zugehöriger Task erreicht wird.
   Persistenzannahme raten; Produktivsystem und bestehende Images unverändert
   lassen.
 - **MIG-016-Ergebnis:** Lokale Implementierung und daemonfreie Gates sind
-  erfolgreich. `gh 2.96.0` ist für `amd64` und `arm64` offiziell
+  erfolgreich. `gh 2.97.0` ist für `amd64` und `arm64` offiziell
   checksum-verifiziert; Entwickler-, Toolchain- und statische Gates wurden
   erweitert. GitHub Actions Lauf 5 hat Repositoryvalidator,
   Compose-Validierung und den nicht veröffentlichten `linux/amd64`-Image-Build
@@ -473,7 +473,7 @@ Gate, sobald ihr zugehöriger Task erreicht wird.
   `1.5.0` bei Digest
   `sha256:9f1db9f29b10b1eea956d1803fcade35c7bf75ef476ea43a03c1abddeddeb82b`
   abgeschlossen. Der isolierte Container war `running` und `healthy`;
-  `gh 2.96.0`, `HOME=/config`, leere XDG-/GH-Konfigurations-Overrides,
+  `gh 2.97.0`, `HOME=/config`, leere XDG-/GH-Konfigurations-Overrides,
   `GH_TELEMETRY=false` sowie die `/config`- und
   Authentifizierungspersistenz nach Neustart wurden bestätigt. Der bestehende
   code-server wurde durch den Betreiber auf die geprüfte Version aktualisiert.
@@ -487,7 +487,7 @@ Gate, sobald ihr zugehöriger Task erreicht wird.
 - **Status:** BLOCKED
 - **Ziel:** Das bestehende digestfixierte LinuxServer-code-server-Image um die
   reproduzierbare, daemonlose SoSeBaMa-Systemtoolchain erweitern: pnpm
-  `11.4.0`, PostgreSQL-18-Client `18.4-1.pgdg24.04+1`, Docker CLI
+  `11.19.0`, PostgreSQL-18-Client `18.4-1.pgdg24.04+1`, Docker CLI
   `5:29.7.0-1~ubuntu.24.04~noble`, Compose V2
   `5.3.1-1~ubuntu.24.04~noble`, Buildx `0.36.0-1~ubuntu.24.04~noble` und
   Trivy `0.72.0`.
@@ -503,7 +503,7 @@ Gate, sobald ihr zugehöriger Task erreicht wird.
   `.github/workflows/publish-image.yml`, `compose.yaml`, Portainer-, Secret-,
   Release- und Deploymentverträge bleiben unverändert.
 - **Quellen- und Integritätsvertrag:** pnpm stammt aus npm und wird über die
-  offizielle Registry-Integrity `sha512-8P68fjdVKrSFSUqRQkGzOOCzWAuT1UzjHwCTMBWICGMSkDihtK5OQUoO5jrDW/IRl+mQFyxKaCVkULVjYxCWjw==`
+  offizielle Registry-Integrity `sha512-eIHz7VkNRyxKlV4riLISF5ERYGbcyIy8o4SeybYPG7qm0syyIfqR2k4cZb7yvL43k2Wup6xTnHv4be3DobItzg==`
   geprüft. PGDG- und Docker-APT-Quellen verwenden dedizierte `signed-by`-
   Keyrings und die Fingerprints `B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8`
   beziehungsweise `9DC858229FC7DD38854AE2D88D81803C0EBFCD88`. Trivy stammt aus
@@ -529,9 +529,10 @@ Gate, sobald ihr zugehöriger Task erreicht wird.
   beide Architekturen, Runtime-Smoke und alle Trivy-Scans nach; keine ungeklärten
   `HIGH`-/`CRITICAL`-Befunde; `TASK-RESULT.md` ist wahrheitsgemäß. Der Task
   endet höchstens mit `READY_FOR_REVIEW`; `COMPLETED` ist erst nach
-  menschlicher Abnahme und Merge zulässig. Der aktuelle Status ist wegen der
-  ungeklärten PR-Imagebefunde `BLOCKED`; EXT-014 dokumentiert die ausstehende
-  Eigentümerentscheidung.
+  menschlicher Abnahme und Merge zulässig. Der aktuelle Status ist wegen der ungeklärten tatsächlichen PR-Imagebefunde
+  `BLOCKED`; EXT-014 ist als `COMPLETED` dokumentiert und erlaubt nur die
+  befristete Ausnahme `AVD-DS-0002` bis einschließlich `2026-10-31` für den
+  LinuxServer-s6-Initvertrag.
 - **Rollback / Abbruchstrategie:** Bei nicht ausführbarer Prüfung oder einem
   nicht sicher behebbaren `HIGH`-/`CRITICAL`-Befund MIG-017 auf `BLOCKED`
   setzen, Befund und betroffene Schicht dokumentieren und keine Ignore-Regel

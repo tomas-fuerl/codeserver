@@ -19,12 +19,15 @@ Der einzige primäre Job führt das lokale Gate
 QEMU-Action `docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8`
 (`v4.2.0`) sowie die offizielle Aqua-Action
 `aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567`
-(`v0.3.1`) ein. Danach baut er den Dockerfile vollständig für `linux/amd64`
+(`v0.3.1`) ein und installiert ausdrücklich Trivy `v0.72.0`; unmittelbar
+nach der Installation wird `trivy --version` exakt geprüft. Danach baut er den Dockerfile vollständig für `linux/amd64`
 und `linux/arm64` ohne Push oder Registry-Login. Der `amd64`-Build wird für
 den isolierten Runtime-Smoke-Test geladen; der `arm64`-Build wird als OCI-
 Archiv für den tatsächlichen Trivy-Image-Scan erzeugt. Buildx verwendet den
 GitHub-Actions-Cache. Es gibt keine schreibende Tokenberechtigung und keine
 Secrets.
+
+Der normale LinuxServer-Einstiegspunkt wird zusätzlich mit synthetischer `/config`- und Passwort-Hash-Datei gestartet: CI prüft Healthcheck, PUID/PGID-Ownership, Nicht-Root-Dienst, `/config`-Persistenz nach Neustart sowie das Fehlen von Socket und Daemons.
 
 Der Runtime-Smoke-Test überschreibt den Entry Point und prüft Node, pnpm,
 PostgreSQL-Clients, Docker CLI, Compose V2, Buildx und Trivy. Er verwendet
@@ -34,6 +37,11 @@ den Repository-Dateisystem-/Konfigurationsstand und beide tatsächlich
 gebauten Architekturartefakte. Das Skript schreibt nur eine restriktive
 temporäre JSON-Datei, gibt keine Secret-Matches aus und beendet sich bei
 `HIGH`/`CRITICAL` mit Exit-Code 1; Scannerfehler liefern Exit-Code 2.
+AMD64- und ARM64-Scans laufen unabhängig mit `if: always()`/`continue-on-error`;
+der abschließende Gate-Schritt schlägt bei Status 1 oder 2 fehl. Der Scanner
+lädt ausschließlich deterministisch sortierte, sanitiserte Vulnerability-Felder
+und getrennte Fix-/No-Fix-/Direkttool-/Basisimage-Counts als CI-Artefakt hoch;
+Secret-Scans liefern nur Anzahl und Status.
 
 Der Docker-Buildkontext wird durch eine restriktive `.dockerignore`-Allowlist
 begrenzt. Da das Dockerfile keine lokalen `COPY`- oder `ADD`-Eingaben besitzt,

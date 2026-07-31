@@ -19,7 +19,7 @@ concurrency:
 jobs:
   validate-and-build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -64,7 +64,8 @@ jobs:
           TZ=Etc/UTC
           PROXY_DOMAIN=codeserver.example.com
           PUBLIC_ENV
-          printf '%s%s\n' 'CODESERVER_SECRET_' 'FILE=/tmp/codeserver-ci-secret' >>"$temp_env"
+          printf '%s%s
+' 'CODESERVER_SECRET_' 'FILE=/tmp/codeserver-ci-secret' >>"$temp_env"
           docker compose --env-file "$temp_env" -f compose.yaml config >"$rendered"
           test "$(docker compose --env-file "$temp_env" -f compose.yaml config --services)" = "code-server"
           grep -Fq 'image: ghcr.io/example/codeserver:1.2.3' "$rendered"
@@ -82,6 +83,16 @@ jobs:
 
       - name: Set up Trivy on the runner
         uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.72.0
+          cache: false
+
+      - name: Verify exact CI Trivy version
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          trivy --version
+          test "$(trivy --version | sed -n '1p')" = 'Version: 0.72.0'
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
@@ -120,7 +131,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Runtime smoke test on amd64 image
+      - name: Runtime CLI smoke test on amd64 image
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -140,14 +151,138 @@ jobs:
             ! command -v containerd
           '
 
-      - name: Trivy filesystem and configuration scan
+      - name: Runtime LinuxServer entrypoint and restart test
         shell: bash
-        run: ./scripts/ci/run-trivy-scan.sh --filesystem .
+        run: |
+          set -Eeuo pipefail
+          config_dir="$(mktemp -d "${RUNNER_TEMP}/codeserver-config.XXXXXX")"
+          secret_file="$(mktemp "${RUNNER_TEMP}/codeserver-secret.XXXXXX")"
+          log_file="$(mktemp "${RUNNER_TEMP}/codeserver-log.XXXXXX")"
+          container_name=codeserver-normal-smoke
+          puid=1234
+          pgid=1234
+          cleanup() {
+            docker rm --force "$container_name" >/dev/null 2>&1 || true
+            rm -rf -- "$config_dir" "$secret_file" "$log_file"
+          }
+          trap cleanup EXIT
+          umask 077
+          docker run --rm --entrypoint /bin/bash codeserver-ci:amd64 -c             "printf '%s' synthetic-password | argon2 synthetic-salt -id -t 1 -m 8 -p 1 -l 16 -e" >"$secret_file"
+          chmod 600 "$secret_file"
+          docker run --detach --name "$container_name" --network none             --env PUID="$puid" --env PGID="$pgid" --env TZ=Etc/UTC             --env FILE__HASHED_PASSWORD=/run/secrets/hashed_password             --volume "$config_dir:/config"             --volume "$secret_file:/run/secrets/hashed_password:ro"             codeserver-ci:amd64 >/dev/null
+          wait_healthy() {
+            local attempt status
+            for attempt in $(seq 1 90); do
+              status="$(docker inspect --format '{{.State.Health.Status}}' "$container_name" 2>/dev/null || true)"
+              [[ "$status" == healthy ]] && return 0
+              sleep 1
+            done
+            docker logs "$container_name" >&2 || true
+            return 1
+          }
+          wait_healthy
+          docker exec "$container_name" curl --fail --silent http://127.0.0.1:8443/healthz >/dev/null
+          test "$(docker exec "$container_name" stat -c '%u:%g' /config)" = "$puid:$pgid"
+          docker exec "$container_name" sh -c 'printf marker > /config/restart-marker'
+          test "$(docker exec "$container_name" cat /config/restart-marker)" = marker
+          app_uid="$(docker exec "$container_name" ps -eo uid=,args= | awk '/[c]ode-server/ {print $1; exit}' | tr -d ' ' )"
+          test "$app_uid" = "$puid"
+          ! docker exec "$container_name" sh -c 'ps -eo args= | grep -E "(^|/)(dockerd|containerd)( |$)"'
+          ! docker exec "$container_name" test -S /var/run/docker.sock
+          docker logs "$container_name" >"$log_file" 2>&1
+          ! grep -Fq "$(tr -d '\n' <"$secret_file")" "$log_file"
+          docker restart "$container_name" >/dev/null
+          wait_healthy
+          docker exec "$container_name" curl --fail --silent http://127.0.0.1:8443/healthz >/dev/null
+          test "$(docker exec "$container_name" cat /config/restart-marker)" = marker
+          test "$(docker exec "$container_name" stat -c '%u:%g' /config)" = "$puid:$pgid"
+          app_uid="$(docker exec "$container_name" ps -eo uid=,args= | awk '/[c]ode-server/ {print $1; exit}' | tr -d ' ' )"
+          test "$app_uid" = "$puid"
+          docker logs "$container_name" >>"$log_file" 2>&1
+          ! grep -Fq "$(tr -d '\n' <"$secret_file")" "$log_file"
+
+      - name: Prepare Trivy report directory
+        if: always()
+        shell: bash
+        run: mkdir -p "${RUNNER_TEMP}/trivy-reports"
+
+      - name: Trivy filesystem and configuration scan
+        id: trivy_filesystem
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          ./scripts/ci/run-trivy-scan.sh --filesystem . --architecture repository --report-dir "${RUNNER_TEMP}/trivy-reports"
+          status=$?
+          printf '%s
+' "$status" >"${RUNNER_TEMP}/trivy-reports/repository.exit"
+          exit "$status"
 
       - name: Trivy amd64 image scan
+        id: trivy_amd64
+        continue-on-error: true
         shell: bash
-        run: ./scripts/ci/run-trivy-scan.sh --image codeserver-ci:amd64
+        run: |
+          set +e
+          ./scripts/ci/run-trivy-scan.sh --image codeserver-ci:amd64 --architecture amd64 --report-dir "${RUNNER_TEMP}/trivy-reports"
+          status=$?
+          printf '%s
+' "$status" >"${RUNNER_TEMP}/trivy-reports/amd64.exit"
+          exit "$status"
 
       - name: Trivy arm64 image scan
+        id: trivy_arm64
+        continue-on-error: true
         shell: bash
-        run: ./scripts/ci/run-trivy-scan.sh --image-archive "${RUNNER_TEMP}/codeserver-arm64.tar"
+        run: |
+          set +e
+          ./scripts/ci/run-trivy-scan.sh --image-archive "${RUNNER_TEMP}/codeserver-arm64.tar" --architecture arm64 --report-dir "${RUNNER_TEMP}/trivy-reports"
+          status=$?
+          printf '%s
+' "$status" >"${RUNNER_TEMP}/trivy-reports/arm64.exit"
+          exit "$status"
+
+      - name: Summarize sanitized Trivy reports
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for report in "${RUNNER_TEMP}"/trivy-reports/*-summary.json; do
+            [[ -f "$report" ]] || continue
+            jq -r '"### " + .Architecture + "
+- Vulnerabilities: " + (.VulnerabilityCount|tostring) + " (fix available: " + (.FixAvailable|tostring) + ", no fix: " + (.NoFixAvailable|tostring) + ")
+- Direct tool dependencies: " + (.DirectToolDependency|tostring) + "; inherited base image: " + (.InheritedBaseImage|tostring) + "
+- Severity: CRITICAL=" + (.Critical|tostring) + " HIGH=" + (.High|tostring) + " MEDIUM=" + (.Medium|tostring) + " LOW=" + (.Low|tostring) + " UNKNOWN=" + (.Unknown|tostring) + "
+- Misconfigurations: " + (.MisconfigurationCount|tostring) + "; secrets: " + (.SecretCount|tostring) + " (" + .SecretStatus + ")"' "$report" >>"$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Upload sanitized Trivy reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v7.0.1
+        with:
+          name: trivy-sanitized-reports
+          path: ${{ runner.temp }}/trivy-reports
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Gate all Trivy scans
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          failed=0
+          for report in "${RUNNER_TEMP}"/trivy-reports/{repository,amd64,arm64}.exit; do
+            if [[ ! -f "$report" ]]; then
+              echo "Missing Trivy status: $report" >&2
+              failed=1
+              continue
+            fi
+            status="$(cat "$report")"
+            case "$status" in
+              0) ;;
+              1) echo "Trivy reported HIGH/CRITICAL findings: $report" >&2; failed=1 ;;
+              2) echo "Trivy scan/input error: $report" >&2; failed=1 ;;
+              *) echo "Invalid Trivy exit code in $report: $status" >&2; failed=1 ;;
+            esac
+          done
+          exit "$failed"
