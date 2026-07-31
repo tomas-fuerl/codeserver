@@ -64,8 +64,7 @@ jobs:
           TZ=Etc/UTC
           PROXY_DOMAIN=codeserver.example.com
           PUBLIC_ENV
-          printf '%s%s
-' 'CODESERVER_SECRET_' 'FILE=/tmp/codeserver-ci-secret' >>"$temp_env"
+          printf '%s%s\n' 'CODESERVER_SECRET_' 'FILE=/tmp/codeserver-ci-secret' >>"$temp_env"
           docker compose --env-file "$temp_env" -f compose.yaml config >"$rendered"
           test "$(docker compose --env-file "$temp_env" -f compose.yaml config --services)" = "code-server"
           grep -Fq 'image: ghcr.io/example/codeserver:1.2.3' "$rendered"
@@ -135,20 +134,20 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          docker run --rm --entrypoint /bin/bash codeserver-ci:amd64 -Eeuo pipefail -c '
-            node --version
-            pnpm --version
-            psql --version
-            pg_isready --version
-            pg_dump --version
-            pg_restore --version
-            docker --version
-            docker compose version
-            docker buildx version
-            trivy --version
-            test ! -S /var/run/docker.sock
-            ! command -v dockerd
-            ! command -v containerd
+          docker run --rm --entrypoint /bin/bash codeserver-ci:amd64 -Eeuo pipefail -c '\
+            node --version\
+            pnpm --version\
+            psql --version\
+            pg_isready --version\
+            pg_dump --version\
+            pg_restore --version\
+            docker --version\
+            docker compose version\
+            docker buildx version\
+            trivy --version\
+            test ! -S /var/run/docker.sock\
+            ! command -v dockerd\
+            ! command -v containerd\
           '
 
       - name: Runtime LinuxServer entrypoint and restart test
@@ -167,9 +166,15 @@ jobs:
           }
           trap cleanup EXIT
           umask 077
-          docker run --rm --entrypoint /bin/bash codeserver-ci:amd64 -c             "printf '%s' synthetic-password | argon2 synthetic-salt -id -t 1 -m 8 -p 1 -l 16 -e" >"$secret_file"
+          docker run --rm --entrypoint /bin/bash codeserver-ci:amd64 -c \
+            "printf '%s' synthetic-password | argon2 synthetic-salt -id -t 1 -m 8 -p 1 -l 16 -e" >"$secret_file"
           chmod 600 "$secret_file"
-          docker run --detach --name "$container_name" --network none             --env PUID="$puid" --env PGID="$pgid" --env TZ=Etc/UTC             --env FILE__HASHED_PASSWORD=/run/secrets/hashed_password             --volume "$config_dir:/config"             --volume "$secret_file:/run/secrets/hashed_password:ro"             codeserver-ci:amd64 >/dev/null
+          docker run --detach --name "$container_name" --network none \
+            --env PUID="$puid" --env PGID="$pgid" --env TZ=Etc/UTC \
+            --env FILE__HASHED_PASSWORD=/run/secrets/hashed_password \
+            --volume "$config_dir:/config" \
+            --volume "$secret_file:/run/secrets/hashed_password:ro" \
+            codeserver-ci:amd64 >/dev/null
           wait_healthy() {
             local attempt status
             for attempt in $(seq 1 90); do
@@ -214,8 +219,7 @@ jobs:
           set +e
           ./scripts/ci/run-trivy-scan.sh --filesystem . --architecture repository --report-dir "${RUNNER_TEMP}/trivy-reports"
           status=$?
-          printf '%s
-' "$status" >"${RUNNER_TEMP}/trivy-reports/repository.exit"
+          printf '%s\n' "$status" >"${RUNNER_TEMP}/trivy-reports/repository.exit"
           exit "$status"
 
       - name: Trivy amd64 image scan
@@ -226,8 +230,7 @@ jobs:
           set +e
           ./scripts/ci/run-trivy-scan.sh --image codeserver-ci:amd64 --architecture amd64 --report-dir "${RUNNER_TEMP}/trivy-reports"
           status=$?
-          printf '%s
-' "$status" >"${RUNNER_TEMP}/trivy-reports/amd64.exit"
+          printf '%s\n' "$status" >"${RUNNER_TEMP}/trivy-reports/amd64.exit"
           exit "$status"
 
       - name: Trivy arm64 image scan
@@ -238,8 +241,7 @@ jobs:
           set +e
           ./scripts/ci/run-trivy-scan.sh --image-archive "${RUNNER_TEMP}/codeserver-arm64.tar" --architecture arm64 --report-dir "${RUNNER_TEMP}/trivy-reports"
           status=$?
-          printf '%s
-' "$status" >"${RUNNER_TEMP}/trivy-reports/arm64.exit"
+          printf '%s\n' "$status" >"${RUNNER_TEMP}/trivy-reports/arm64.exit"
           exit "$status"
 
       - name: Summarize sanitized Trivy reports
@@ -249,11 +251,7 @@ jobs:
           set -Eeuo pipefail
           for report in "${RUNNER_TEMP}"/trivy-reports/*-summary.json; do
             [[ -f "$report" ]] || continue
-            jq -r '"### " + .Architecture + "
-- Vulnerabilities: " + (.VulnerabilityCount|tostring) + " (fix available: " + (.FixAvailable|tostring) + ", no fix: " + (.NoFixAvailable|tostring) + ")
-- Direct tool dependencies: " + (.DirectToolDependency|tostring) + "; inherited base image: " + (.InheritedBaseImage|tostring) + "
-- Severity: CRITICAL=" + (.Critical|tostring) + " HIGH=" + (.High|tostring) + " MEDIUM=" + (.Medium|tostring) + " LOW=" + (.Low|tostring) + " UNKNOWN=" + (.Unknown|tostring) + "
-- Misconfigurations: " + (.MisconfigurationCount|tostring) + "; secrets: " + (.SecretCount|tostring) + " (" + .SecretStatus + ")"' "$report" >>"$GITHUB_STEP_SUMMARY"
+            jq -r '"### " + .Architecture + "\n- Vulnerabilities: " + (.VulnerabilityCount|tostring) + " (fix available: " + (.FixAvailable|tostring) + ", no fix: " + (.NoFixAvailable|tostring) + ")\n- Direct tool dependencies: " + (.DirectToolDependency|tostring) + "; inherited base image: " + (.InheritedBaseImage|tostring) + "\n- Severity: CRITICAL=" + (.Critical|tostring) + " HIGH=" + (.High|tostring) + " MEDIUM=" + (.Medium|tostring) + " LOW=" + (.Low|tostring) + " UNKNOWN=" + (.Unknown|tostring) + "\n- Misconfigurations: " + (.MisconfigurationCount|tostring) + "; secrets: " + (.SecretCount|tostring) + " (" + .SecretStatus + ")"' "$report" >>"$GITHUB_STEP_SUMMARY"
           done
 
       - name: Upload sanitized Trivy reports
