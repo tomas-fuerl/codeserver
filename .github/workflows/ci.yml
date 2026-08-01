@@ -282,53 +282,46 @@ jobs:
           }
 
           verify_listener_uid() {
-            local listener_output listener_pid listener_uid
-            local -a listener_pids=()
+            local listener_record listener_pid listener_uid
 
-            if ! listener_output="$(
-              docker exec --user root "$container_name" \
-                lsof -nP -t -iTCP:8443 -sTCP:LISTEN 2>&1
+            if ! listener_record="$(
+              docker exec --interactive --user root "$container_name" \
+                python3 - 8443 < scripts/ci/resolve-listener-uid.py 2>&1
             )"; then
-              printf '%s\n' 'Runtime test failed: no TCP/8443 listener was found.' >&2
-              printf '%s\n' "$listener_output" >&2
+              printf '%s
+' \
+                'Runtime test failed: TCP/8443 listener ownership could not be resolved.' \
+                >&2
+              printf '%s
+' "$listener_record" >&2
               return 1
             fi
 
-            mapfile -t listener_pids < <(
-              printf '%s\n' "$listener_output" | awk 'NF' | sort -u
-            )
-            if (( ${#listener_pids[@]} != 1 )); then
-              printf 'Runtime test failed: expected one TCP/8443 listener PID, found %d: %s\n' \
-                "${#listener_pids[@]}" "${listener_pids[*]:-none}" >&2
+            if [[ ! "$listener_record" =~ ^([0-9]+)[[:blank:]]+([0-9]+)$ ]]; then
+              printf 'Runtime test failed: unexpected listener resolver output: %q
+' \
+                "$listener_record" >&2
               return 1
             fi
 
-            listener_pid="${listener_pids[0]}"
-            [[ "$listener_pid" =~ ^[0-9]+$ ]] || {
-              printf 'Runtime test failed: invalid listener PID %s.\n' "$listener_pid" >&2
-              return 1
-            }
+            listener_pid="${BASH_REMATCH[1]}"
+            listener_uid="${BASH_REMATCH[2]}"
 
-            listener_uid="$(
-              docker exec "$container_name" \
-                ps -o uid= -p "$listener_pid" | tr -d '[:space:]'
-            )"
-            [[ "$listener_uid" =~ ^[0-9]+$ ]] || {
-              printf 'Runtime test failed: invalid listener UID %s.\n' \
-                "${listener_uid:-empty}" >&2
-              return 1
-            }
             [[ "$listener_uid" == "$puid" ]] || {
-              printf 'Runtime test failed: listener UID %s does not equal PUID %s.\n' \
+              printf 'Runtime test failed: listener UID %s does not equal PUID %s.
+' \
                 "$listener_uid" "$puid" >&2
               return 1
             }
             [[ "$listener_uid" != 0 ]] || {
-              printf '%s\n' 'Runtime test failed: listener runs as root.' >&2
+              printf '%s
+' 'Runtime test failed: listener runs as root.' >&2
               return 1
             }
 
-            printf 'TCP/8443 listener PID=%s UID=%s\n' "$listener_pid" "$listener_uid"
+            printf 'TCP/8443 listener PID=%s UID=%s
+' \
+              "$listener_pid" "$listener_uid"
           }
 
           assert_secret_absent_from_logs() {
