@@ -282,53 +282,164 @@ jobs:
           }
 
           verify_listener_uid() {
-            local listener_output listener_pid listener_uid
-            local -a listener_pids=()
+            local listener_output listener_pid listener_uid unexpected
 
             if ! listener_output="$(
-              docker exec "$container_name" \
-                lsof -nP -t -iTCP:8443 -sTCP:LISTEN 2>&1
+              docker exec \
+                --user root \
+                --env EXPECTED_PORT=8443 \
+                --interactive \
+                "$container_name" \
+                python3 - <<'PYLISTENER'
+import glob
+import os
+
+port_text = os.environ.get("EXPECTED_PORT", "")
+
+try:
+    expected_port = int(port_text)
+except ValueError:
+    raise SystemExit(f"invalid EXPECTED_PORT: {port_text!r}")
+
+if not 1 <= expected_port <= 65535:
+    raise SystemExit(
+        f"EXPECTED_PORT outside valid range: {expected_port}"
+    )
+
+port_hex = f"{expected_port:04X}"
+socket_inodes: set[str] = set()
+
+for table_path in ("/proc/net/tcp", "/proc/net/tcp6"):
+    try:
+        with open(table_path, encoding="utf-8") as table:
+            next(table, None)
+
+            for line in table:
+                fields = line.split()
+
+                if len(fields) < 10:
+                    continue
+
+                local_address = fields[1]
+                state = fields[3]
+                inode = fields[9]
+
+                _, separator, local_port = local_address.rpartition(":")
+
+                if (
+                    separator
+                    and local_port.upper() == port_hex
+                    and state == "0A"
+                    and inode.isdigit()
+                ):
+                    socket_inodes.add(inode)
+    except FileNotFoundError:
+        continue
+
+if not socket_inodes:
+    raise SystemExit(
+        f"no LISTEN socket inode found for TCP port {expected_port}"
+    )
+
+socket_targets = {
+    f"socket:[{inode}]"
+    for inode in socket_inodes
+}
+
+listener_pids: set[int] = set()
+
+for fd_path in glob.glob("/proc/[0-9]*/fd/*"):
+    try:
+        target = os.readlink(fd_path)
+    except OSError:
+        continue
+
+    if target not in socket_targets:
+        continue
+
+    parts = fd_path.split("/")
+
+    if len(parts) >= 4 and parts[2].isdigit():
+        listener_pids.add(int(parts[2]))
+
+if len(listener_pids) != 1:
+    formatted = ",".join(
+        str(pid) for pid in sorted(listener_pids)
+    )
+
+    raise SystemExit(
+        "expected exactly one listener process for "
+        f"TCP port {expected_port}; found "
+        f"{len(listener_pids)}: {formatted or 'none'}"
+    )
+
+listener_pid = next(iter(listener_pids))
+status_path = f"/proc/{listener_pid}/status"
+uid_values: list[str] | None = None
+
+with open(status_path, encoding="utf-8") as status_file:
+    for line in status_file:
+        if line.startswith("Uid:"):
+            uid_values = line.split()[1:]
+            break
+
+if uid_values is None or len(uid_values) < 2:
+    raise SystemExit(
+        f"could not determine effective UID for listener PID "
+        f"{listener_pid}"
+    )
+
+try:
+    effective_uid = int(uid_values[1])
+except ValueError:
+    raise SystemExit(
+        f"invalid effective UID for listener PID "
+        f"{listener_pid}: {uid_values[1]!r}"
+    )
+
+print(listener_pid, effective_uid)
+PYLISTENER
             )"; then
-              printf '%s\n' 'Runtime test failed: no TCP/8443 listener was found.' >&2
-              printf '%s\n' "$listener_output" >&2
+              printf '%s\n' \
+                'Runtime test failed: TCP/8443 listener process could not be resolved.' \
+                >&2
               return 1
             fi
 
-            mapfile -t listener_pids < <(
-              printf '%s\n' "$listener_output" | awk 'NF' | sort -u
-            )
-            if (( ${#listener_pids[@]} != 1 )); then
-              printf 'Runtime test failed: expected one TCP/8443 listener PID, found %d: %s\n' \
-                "${#listener_pids[@]}" "${listener_pids[*]:-none}" >&2
-              return 1
-            fi
+            read -r listener_pid listener_uid unexpected <<<"$listener_output"
 
-            listener_pid="${listener_pids[0]}"
-            [[ "$listener_pid" =~ ^[0-9]+$ ]] || {
-              printf 'Runtime test failed: invalid listener PID %s.\n' "$listener_pid" >&2
+            [[ -z "${unexpected:-}" ]] || {
+              printf 'Runtime test failed: unexpected listener output: %s\n' \
+                "$listener_output" >&2
               return 1
             }
 
-            listener_uid="$(
-              docker exec "$container_name" \
-                ps -o uid= -p "$listener_pid" | tr -d '[:space:]'
-            )"
+            [[ "$listener_pid" =~ ^[0-9]+$ ]] || {
+              printf 'Runtime test failed: invalid listener PID %s.\n' \
+                "${listener_pid:-empty}" >&2
+              return 1
+            }
+
             [[ "$listener_uid" =~ ^[0-9]+$ ]] || {
               printf 'Runtime test failed: invalid listener UID %s.\n' \
                 "${listener_uid:-empty}" >&2
               return 1
             }
+
             [[ "$listener_uid" == "$puid" ]] || {
               printf 'Runtime test failed: listener UID %s does not equal PUID %s.\n' \
                 "$listener_uid" "$puid" >&2
               return 1
             }
+
             [[ "$listener_uid" != 0 ]] || {
-              printf '%s\n' 'Runtime test failed: listener runs as root.' >&2
+              printf '%s\n' \
+                'Runtime test failed: listener runs as root.' >&2
               return 1
             }
 
-            printf 'TCP/8443 listener PID=%s UID=%s\n' "$listener_pid" "$listener_uid"
+            printf 'TCP/8443 listener PID=%s UID=%s\n' \
+              "$listener_pid" "$listener_uid"
           }
 
           assert_secret_absent_from_logs() {
