@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
-"""Resolve the effective UID of the process listening on a TCP port."""
+"""Resolve the effective UID owning a TCP LISTEN socket."""
 
 from __future__ import annotations
 
 import argparse
 import os
-import re
 import socket
 import sys
 from pathlib import Path
 
 PROC_ROOT = Path("/proc")
 LISTEN_STATE = "0A"
-SOCKET_LINK = re.compile(r"^socket:\[(?P<inode>[0-9]+)\]$")
 
 
 class ResolutionError(RuntimeError):
-    """Raised when a listener cannot be resolved unambiguously."""
+    """Raised when a listener UID cannot be resolved unambiguously."""
 
 
 def tcp_port(value: str) -> int:
@@ -35,11 +33,14 @@ def tcp_port(value: str) -> int:
     return port
 
 
-def listener_inodes(
+def listener_uids(
     port: int,
     proc_root: Path = PROC_ROOT,
-) -> set[str]:
-    inodes: set[str] = set()
+) -> set[int]:
+    """Return UIDs recorded for LISTEN sockets on the requested port."""
+
+    uids: set[int] = set()
+    readable_tables = 0
 
     for table_name in ("tcp", "tcp6"):
         table_path = proc_root / "net" / table_name
@@ -55,8 +56,11 @@ def listener_inodes(
                 f"cannot read {table_path}: {error}"
             ) from error
 
+        readable_tables += 1
+
         for line_number, line in enumerate(lines[1:], start=2):
             fields = line.split()
+
             if not fields:
                 continue
 
@@ -68,7 +72,7 @@ def listener_inodes(
 
             local_endpoint = fields[1]
             state = fields[3]
-            inode = fields[9]
+            uid_text = fields[7]
 
             try:
                 _address, port_hex = local_endpoint.rsplit(
@@ -82,153 +86,50 @@ def listener_inodes(
                     f"line {line_number}: {local_endpoint!r}"
                 ) from error
 
-            if (
-                state == LISTEN_STATE
-                and local_port == port
-                and inode != "0"
-            ):
-                inodes.add(inode)
+            if state != LISTEN_STATE or local_port != port:
+                continue
 
-    return inodes
+            if not uid_text.isdecimal():
+                raise ResolutionError(
+                    f"invalid listener UID in {table_path} "
+                    f"line {line_number}: {uid_text!r}"
+                )
 
+            uids.add(int(uid_text, 10))
 
-def effective_uid(process_dir: Path) -> int | None:
-    status_path = process_dir / "status"
+    if readable_tables == 0:
+        raise ResolutionError(
+            f"neither {proc_root / 'net/tcp'} nor "
+            f"{proc_root / 'net/tcp6'} is readable"
+        )
 
-    try:
-        lines = status_path.read_text(
-            encoding="ascii"
-        ).splitlines()
-    except (
-        FileNotFoundError,
-        PermissionError,
-        ProcessLookupError,
-    ):
-        return None
-    except OSError:
-        return None
-
-    for line in lines:
-        if not line.startswith("Uid:"):
-            continue
-
-        fields = line.split()
-        if len(fields) < 3:
-            raise ResolutionError(
-                f"malformed UID record in {status_path}"
-            )
-
-        try:
-            return int(fields[2], 10)
-        except ValueError as error:
-            raise ResolutionError(
-                f"invalid effective UID in {status_path}: "
-                f"{fields[2]!r}"
-            ) from error
-
-    raise ResolutionError(
-        f"missing UID record in {status_path}"
-    )
+    return uids
 
 
-def listener_owners(
+def resolve_listener_uid(
     port: int,
     proc_root: Path = PROC_ROOT,
-) -> dict[int, int]:
-    inodes = listener_inodes(port, proc_root)
-    if not inodes:
+) -> int:
+    """Resolve one unambiguous UID for all listeners on a TCP port."""
+
+    uids = listener_uids(port, proc_root)
+
+    if not uids:
         raise ResolutionError(
             f"no TCP LISTEN socket found for port {port}"
         )
 
-    owners: dict[int, int] = {}
-
-    try:
-        process_dirs = sorted(
-            (
-                entry
-                for entry in proc_root.iterdir()
-                if entry.name.isdecimal() and entry.is_dir()
-            ),
-            key=lambda entry: int(entry.name),
-        )
-    except OSError as error:
-        raise ResolutionError(
-            f"cannot enumerate {proc_root}: {error}"
-        ) from error
-
-    for process_dir in process_dirs:
-        fd_dir = process_dir / "fd"
-
-        try:
-            file_descriptors = list(fd_dir.iterdir())
-        except (
-            FileNotFoundError,
-            PermissionError,
-            ProcessLookupError,
-        ):
-            continue
-        except OSError:
-            continue
-
-        owns_listener = False
-
-        for file_descriptor in file_descriptors:
-            try:
-                target = os.readlink(file_descriptor)
-            except (
-                FileNotFoundError,
-                PermissionError,
-                ProcessLookupError,
-            ):
-                continue
-            except OSError:
-                continue
-
-            match = SOCKET_LINK.fullmatch(target)
-            if (
-                match
-                and match.group("inode") in inodes
-            ):
-                owns_listener = True
-                break
-
-        if not owns_listener:
-            continue
-
-        uid = effective_uid(process_dir)
-        if uid is not None:
-            owners[int(process_dir.name)] = uid
-
-    if not owners:
-        joined_inodes = ", ".join(
-            sorted(inodes, key=int)
-        )
-        raise ResolutionError(
-            "listener socket inode(s) "
-            f"{joined_inodes} have no readable process owner"
-        )
-
-    return owners
-
-
-def resolve_single_owner(
-    port: int,
-    proc_root: Path = PROC_ROOT,
-) -> tuple[int, int]:
-    owners = listener_owners(port, proc_root)
-
-    if len(owners) != 1:
+    if len(uids) != 1:
         rendered = ", ".join(
-            f"pid={pid} uid={uid}"
-            for pid, uid in sorted(owners.items())
+            str(uid)
+            for uid in sorted(uids)
         )
         raise ResolutionError(
-            "expected exactly one process owner for "
-            f"TCP/{port}, found {len(owners)}: {rendered}"
+            f"expected exactly one UID for TCP/{port}, "
+            f"found {len(uids)}: {rendered}"
         )
 
-    return next(iter(owners.items()))
+    return next(iter(uids))
 
 
 def run_self_test() -> None:
@@ -240,26 +141,27 @@ def run_self_test() -> None:
         listener.listen(1)
 
         port = int(listener.getsockname()[1])
-        pid, uid = resolve_single_owner(port)
+        resolved_uid = resolve_listener_uid(port)
 
-    expected = (os.getpid(), os.geteuid())
-    if (pid, uid) != expected:
+    expected_uid = os.geteuid()
+
+    if resolved_uid != expected_uid:
         raise ResolutionError(
-            f"self-test resolved pid={pid} uid={uid}, "
-            f"expected pid={expected[0]} uid={expected[1]}"
+            f"self-test resolved uid={resolved_uid}, "
+            f"expected uid={expected_uid}"
         )
 
     print(
         "resolve-listener-uid self-test passed: "
-        f"pid={pid} uid={uid}"
+        f"uid={resolved_uid}"
     )
 
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Resolve the single process and effective UID "
-            "owning a TCP LISTEN socket."
+            "Resolve the effective UID recorded for "
+            "a TCP LISTEN socket."
         )
     )
     parser.add_argument(
@@ -272,7 +174,7 @@ def parse_arguments() -> argparse.Namespace:
         action="store_true",
         help=(
             "open a temporary listener and validate "
-            "/proc resolution"
+            "/proc socket UID resolution"
         ),
     )
 
@@ -299,7 +201,7 @@ def main() -> int:
             run_self_test()
             return 0
 
-        pid, uid = resolve_single_owner(arguments.port)
+        listener_uid = resolve_listener_uid(arguments.port)
     except ResolutionError as error:
         print(
             f"resolve-listener-uid: {error}",
@@ -307,7 +209,7 @@ def main() -> int:
         )
         return 1
 
-    print(f"{pid} {uid}")
+    print(listener_uid)
     return 0
 
 
