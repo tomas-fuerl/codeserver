@@ -288,18 +288,15 @@ jobs:
               docker exec --interactive --user root "$container_name" \
                 python3 - 8443 < scripts/ci/resolve-listener-uid.py 2>&1
             )"; then
-              printf '%s
-' \
+              printf '%s\n' \
                 'Runtime test failed: TCP/8443 listener ownership could not be resolved.' \
                 >&2
-              printf '%s
-' "$listener_record" >&2
+              printf '%s\n' "$listener_record" >&2
               return 1
             fi
 
             if [[ ! "$listener_record" =~ ^([0-9]+)[[:blank:]]+([0-9]+)$ ]]; then
-              printf 'Runtime test failed: unexpected listener resolver output: %q
-' \
+              printf 'Runtime test failed: unexpected listener resolver output: %q\n' \
                 "$listener_record" >&2
               return 1
             fi
@@ -308,19 +305,18 @@ jobs:
             listener_uid="${BASH_REMATCH[2]}"
 
             [[ "$listener_uid" == "$puid" ]] || {
-              printf 'Runtime test failed: listener UID %s does not equal PUID %s.
-' \
+              printf 'Runtime test failed: listener UID %s does not equal PUID %s.\n' \
                 "$listener_uid" "$puid" >&2
               return 1
             }
+
             [[ "$listener_uid" != 0 ]] || {
-              printf '%s
-' 'Runtime test failed: listener runs as root.' >&2
+              printf '%s\n' \
+                'Runtime test failed: listener runs as root.' >&2
               return 1
             }
 
-            printf 'TCP/8443 listener PID=%s UID=%s
-' \
+            printf 'TCP/8443 listener PID=%s UID=%s\n' \
               "$listener_pid" "$listener_uid"
           }
 
