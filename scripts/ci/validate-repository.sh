@@ -249,6 +249,65 @@ printf 'Running backup verifier regression tests...\n'
 printf 'Running static installation and MIG-006 freeze-contract verification...\n'
 "$repo_root/scripts/verify-installation.sh" --static
 
+printf 'Checking MIG-017 daemonless toolchain contract...\n'
+for required_fragment in \
+  'ARG PNPM_VERSION=11.19.0' \
+  'ARG PG_CLIENT_VERSION=18.4-1.pgdg24.04+1' \
+  'ARG DOCKER_CLI_VERSION=5:29.7.0-1~ubuntu.24.04~noble' \
+  'ARG DOCKER_COMPOSE_VERSION=5.3.1-1~ubuntu.24.04~noble' \
+  'ARG DOCKER_BUILDX_VERSION=0.36.0-1~ubuntu.24.04~noble' \
+  'ARG TRIVY_VERSION=0.72.0' \
+  'Signed-By: /etc/apt/keyrings/apt.postgresql.org.asc' \
+  'Signed-By: /etc/apt/keyrings/docker.asc' \
+  'test ! -S /var/run/docker.sock' \
+  '! command -v dockerd' \
+  '! command -v containerd'; do
+  grep -Fq -- "$required_fragment" "$repo_root/Dockerfile" || {
+    printf 'Missing Dockerfile contract: %s\n' "$required_fragment" >&2
+    exit 1
+  }
+done
+if grep -Eq '^[[:space:]]+(docker-ce|docker.io|dockerd|containerd|containerd.io)[[:space:]]' "$repo_root/Dockerfile"; then
+  printf 'Docker daemon package reference found in install contract.\n' >&2
+  exit 1
+fi
+if grep -Eq '^USER[[:space:]]+abc[[:space:]]*$' "$repo_root/Dockerfile"; then
+  printf 'Dockerfile must preserve the LinuxServer s6/PUID/PGID runtime contract; USER abc is forbidden.\n' >&2
+  exit 1
+fi
+"$repo_root/scripts/ci/run-trivy-scan.sh" --help >/dev/null
+
+printf 'Validating the single time-limited Trivy exception...\n'
+python3 - "$repo_root" <<'PYEXCEPTION'
+from __future__ import annotations
+import re
+import sys
+from pathlib import Path
+root = Path(sys.argv[1])
+path = root / ".trivyignore.yaml"
+if not path.is_file():
+    raise SystemExit("Trivy exception file is missing")
+text = path.read_text(encoding="utf-8")
+ids = re.findall(r"^\s*-\s+id:\s*(\S+)\s*$", text, flags=re.MULTILINE)
+if ids != ["AVD-DS-0002"]:
+    raise SystemExit(f"Trivy exception IDs must be exactly AVD-DS-0002, got {ids!r}")
+if text.count("misconfigurations:") != 1 or text.count("expired_at: 2026-10-31") != 1:
+    raise SystemExit("Trivy exception must have exactly one misconfigurations block and exact expiry")
+if re.search(r"^\s*(vulnerabilities|secrets|licenses):", text, flags=re.MULTILINE):
+    raise SystemExit("Trivy exception may only contain misconfigurations")
+if re.search(r"(?:CVE-|GHSA-|\*)", text) or re.search(r"\b(?:secret|password|token)\s*[:=]", text, flags=re.I):
+    raise SystemExit("Trivy exception contains a forbidden vulnerability, secret, or wildcard rule")
+if re.search(r"^\s*-\s+id:\s+AVD-(?!DS-0002)\S+", text, flags=re.MULTILINE):
+    raise SystemExit("Trivy exception contains a second misconfiguration ID")
+for fragment in ("s6", "PUID", "PGID", "code-server", "not permanently run as root", "CI startup"):
+    if fragment.lower() not in text.lower():
+        raise SystemExit(f"Trivy exception comment is missing required explanation: {fragment}")
+for candidate in (".trivyignore", ".trivyignore.yml", ".trivyignore.json"):
+    if (root / candidate).exists():
+        raise SystemExit(f"additional Trivy suppression file is forbidden: {candidate}")
+print("Trivy exception contract passed: exactly AVD-DS-0002 until 2026-10-31.")
+PYEXCEPTION
+
 printf 'Running publication audit...\n'
 (
   cd "$repo_root"

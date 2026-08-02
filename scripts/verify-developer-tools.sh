@@ -19,6 +19,11 @@ required_commands=(
   npm
   ping
   pnpm
+  psql
+  pg_isready
+  pg_dump
+  pg_restore
+  docker
   ps
   pwsh
   python3
@@ -27,6 +32,7 @@ required_commands=(
   shellcheck
   ssh
   tree
+  trivy
   unzip
   zip
 )
@@ -52,6 +58,15 @@ if [[ "$has_errors" == true ]]; then
   exit 1
 fi
 
+if [[ -S /var/run/docker.sock ]]; then
+  echo "FEHLER: Docker-Socket ist im normalen code-server vorhanden." >&2
+  exit 1
+fi
+if command -v dockerd >/dev/null 2>&1 || command -v containerd >/dev/null 2>&1; then
+  echo "FEHLER: Docker-Daemon oder containerd ist im normalen code-server vorhanden." >&2
+  exit 1
+fi
+
 echo "Versionsinformationen:"
 echo
 
@@ -63,6 +78,23 @@ npm --version
 
 printf 'pnpm:         '
 pnpm --version
+
+printf 'PostgreSQL:   '
+psql --version
+printf 'pg_isready:   '
+pg_isready --version
+printf 'pg_dump:      '
+pg_dump --version
+printf 'pg_restore:   '
+pg_restore --version
+printf 'Docker CLI:   '
+docker --version
+printf 'Compose V2:   '
+docker compose version
+printf 'Buildx:       '
+docker buildx version
+printf 'Trivy:        '
+trivy --version
 
 printf 'Codex:        '
 codex --version

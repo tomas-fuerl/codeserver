@@ -29,13 +29,37 @@ in [CONFIGURATION.md](CONFIGURATION.md).
 
 ## Imagezustand
 
-Das Dockerfile basiert auf `lscr.io/linuxserver/code-server:4.128.0-ls351`
+Das Dockerfile basiert auf `lscr.io/linuxserver/code-server:4.131.0-ls354`
 mit vollständig gepinntem SHA-256-Manifest-Digest. GitHub CLI, Node und
 PowerShell werden aus exakt gepinnten offiziellen Releases installiert und
 gegen offizielle SHA-256-Werte geprüft; pnpm und Codex sind exakt gepinnte
 öffentliche npm-Pakete. `GH_TELEMETRY=false` deaktiviert die pseudonyme
 GitHub-CLI-Telemetrie als reproduzierbaren Image-Default. Das OCI-Source-Label
 verweist auf dieses Repository.
+
+MIG-017 erweitert den systemweiten Entwicklungsumfang reproduzierbar:
+`pnpm 11.19.0` wird als npm-Paket mit Registry-Integrity installiert;
+`postgresql-client-18 18.4-1.pgdg24.04+1` kommt aus dem signierten offiziellen
+PGDG-Repository; Docker CLI `5:29.7.0-1~ubuntu.24.04~noble`, Compose V2
+`5.3.1-1~ubuntu.24.04~noble` und Buildx `0.36.0-1~ubuntu.24.04~noble` kommen
+aus dem signierten offiziellen Docker-Repository; Trivy `0.72.0` kommt aus
+dem offiziellen Aqua-Security-Archiv mit geprüfter Release-Checksummenliste.
+Alle Pins gelten für Ubuntu Noble auf `amd64` und `arm64`; der Basisdigest
+wurde auf den aktuell veröffentlichten `4.131.0-ls354`-Manifeststand aktualisiert,
+um die erste CI-Befundlage gezielt zu remediieren.
+
+Der LinuxServer-s6-Initprozess wird gemäß dem Basisimagevertrag gestartet und wendet `PUID` und `PGID` während der Initialisierung an. Erst danach läuft der code-server-Anwendungsdienst mit der erwarteten Nicht-Root-UID. Der Initprozess erhält keinen Docker-Socket, keine zusätzlichen Capabilities und keinen privilegierten Modus; der Dienstzugriff bleibt auf die expliziten Mounts und Containergrenzen beschränkt.
+
+Die Werkzeuge sind CLIs. Der Build installiert weder `docker-ce` noch
+`docker.io`, `dockerd`, `containerd` oder `containerd.io`, richtet keine
+Docker-Gruppe ein und startet keinen Dienst. Der Container erhält keinen
+Docker-Socket, keine zusätzlichen Capabilities und keinen privilegierten Modus.
+`docker compose version`, `docker buildx version`, PostgreSQL-Clientbefehle und
+`trivy --version` funktionieren daemonlos. Trivy legt seinen Cache unter
+`/config/.cache/trivy` ab. GitHub-hosted CI führt zusätzlich den echten
+Multiarch-Build, den isolierten `amd64`-Runtime-Smoke-Test und die Trivy-
+Dateisystem-, Konfigurations- und Image-Scans aus; ungeklärte `HIGH`- oder
+`CRITICAL`-Befunde blockieren vor dem Merge.
 
 Das produktive Imageformat ist
 `ghcr.io/tomas-fuerl/codeserver:<VERSION>`. `<VERSION>` bezeichnet später ein

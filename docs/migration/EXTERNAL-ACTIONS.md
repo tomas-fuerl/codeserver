@@ -458,3 +458,32 @@ Deployment ausgeführt. Der Betreiberbeleg enthält keine Tokens oder
 `hosts.yml`-Inhalte. Damit sind Runtime-, Health-, Konfigurationspfad-,
 Neustart- und Anmeldepersistenzprüfung erfüllt; EXT-013 blockiert MIG-016 nicht
 mehr.
+
+## EXT-014: Eigentümerentscheidung zu MIG-017-Trivy-Befunden
+
+- **Status:** COMPLETED
+- **Zugehöriger Task:** MIG-017
+- **Verantwortlich:** Repository-Eigentümer
+- **Entscheidungsdatum:** 2026-07-31 (UTC)
+- **Entscheidung:** Es gibt keine pauschale Ausnahme für tatsächliche
+  `HIGH`- oder `CRITICAL`-Schwachstellen. Sichere Patch- und Minor-Updates
+  innerhalb der bereits angenommenen Hauptversionen sind zur Behebung
+  nachgewiesener Befunde erlaubt. Die Dockerfile-Anweisung `USER abc` wird
+  zurückgenommen. Für den Trivy-Misconfiguration-Befund `AVD-DS-0002` wird
+  genau eine befristete Ausnahme bis einschließlich `2026-10-31` genehmigt.
+- **Geltungsbereich:** Die Ausnahme gilt ausschließlich für den
+  LinuxServer-s6-Initvertrag. Keine CVE-, GHSA-, Secret- oder weitere
+  Misconfiguration-ID darf durch diese Entscheidung ignoriert werden. Die
+  versionierte Ausnahme steht ausschließlich in `.trivyignore.yaml` und wird
+  durch den Repositoryvalidator auf genau diese ID und dieses Ablaufdatum
+  begrenzt.
+- **Statusregel:** MIG-017 bleibt `BLOCKED`, solange ungeklärte tatsächliche
+  `HIGH`- oder `CRITICAL`-Befunde vorhanden sind. `COMPLETED` ist weiterhin
+  erst nach menschlicher Abnahme und Merge zulässig.
+- **Nachweis:** `.trivyignore.yaml`, Entfernen von `USER abc`, erneute
+  s6-/PUID-/PGID-Laufzeitprüfung und unabhängige AMD64-/ARM64-Trivy-Gates im
+  Review-Commit. Die Ausnahme ist keine Vulnerability- oder Secret-Suppression.
+- **Rollback:** Ausnahme vor Ablauf entfernen, falls LinuxServer den
+  s6-Initvertrag ändert; bei Ablauf oder unerwarteten IDs schlägt der
+  Repositoryvalidator fehl. Keine produktive Konfiguration, kein Secret und
+  kein Deployment ist betroffen.

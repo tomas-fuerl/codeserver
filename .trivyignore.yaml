@@ -1,0 +1,8 @@
+# Owner-approved, time-limited exception for LinuxServer's s6-init contract.
+# LinuxServer needs s6 to start the init process; PUID and PGID are applied during initialization.
+# The code-server service itself is not permanently run as root; normal CI startup checks this.
+# This is not a CVE exception and does not suppress vulnerabilities, secrets, or other misconfigurations.
+misconfigurations:
+  - id: AVD-DS-0002
+    expired_at: 2026-10-31
+    statement: "Temporary owner-approved exception solely for the LinuxServer s6-init contract; remove by 2026-10-31."

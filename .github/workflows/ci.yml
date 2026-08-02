@@ -18,8 +18,8 @@ concurrency:
 
 jobs:
   validate-and-build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -77,18 +77,381 @@ jobs:
             exit 1
           fi
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+
+      - name: Set up Trivy on the runner
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.72.0
+          cache: false
+
+      - name: Verify exact CI Trivy version
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          trivy --version
+          test "$(trivy --version | sed -n '1p')" = 'Version: 0.72.0'
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
-      - name: Build image without publishing
+      - name: Build amd64 image without publishing
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64
           push: false
-          load: false
+          tags: codeserver-ci:amd64
+          outputs: type=docker,dest=${{ runner.temp }}/codeserver-amd64.tar
           provenance: false
           sbom: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Load amd64 image for runtime and image scan
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          docker load --input "${RUNNER_TEMP}/codeserver-amd64.tar"
+          docker image inspect codeserver-ci:amd64 >/dev/null
+
+      - name: Build arm64 image without publishing
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/arm64
+          push: false
+          outputs: type=docker,dest=${{ runner.temp }}/codeserver-arm64.tar
+          provenance: false
+          sbom: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Runtime CLI smoke test on amd64 image
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          docker run --rm --entrypoint /bin/bash codeserver-ci:amd64 -Eeuo pipefail -c '\
+            node --version\
+            pnpm --version\
+            psql --version\
+            pg_isready --version\
+            pg_dump --version\
+            pg_restore --version\
+            docker --version\
+            docker compose version\
+            docker buildx version\
+            trivy --version\
+            test ! -S /var/run/docker.sock\
+            ! command -v dockerd\
+            ! command -v containerd\
+          '
+
+      - name: Runtime LinuxServer entrypoint and restart test
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          config_dir="$(mktemp -d "${RUNNER_TEMP}/codeserver-config.XXXXXX")"
+          secret_file="$(mktemp "${RUNNER_TEMP}/codeserver-secret.XXXXXX")"
+          log_file="$(mktemp "${RUNNER_TEMP}/codeserver-log.XXXXXX")"
+          container_name=codeserver-normal-smoke
+          puid=1234
+          pgid=1234
+          runner_uid="$(id -u)"
+          runner_gid="$(id -g)"
+
+          redact_stream() {
+            python3 -c '
+          import sys
+          from pathlib import Path
+          synthetic_hash = Path(sys.argv[1]).read_text(encoding="utf-8").strip()
+          data = sys.stdin.read()
+          if synthetic_hash:
+              data = data.replace(synthetic_hash, "[REDACTED]")
+          sys.stdout.write(data)
+          ' "$secret_file"
+          }
+
+          diagnose_runtime() {
+            printf '%s\n' '--- container state ---' >&2
+            docker inspect \
+              --format 'status={{.State.Status}} running={{.State.Running}} exit={{.State.ExitCode}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' \
+              "$container_name" >&2 2>/dev/null || true
+            printf '%s\n' '--- health history ---' >&2
+            docker inspect \
+              --format '{{if .State.Health}}{{range .State.Health.Log}}{{printf "end=%s exit=%d output=%q\n" .End .ExitCode .Output}}{{end}}{{else}}healthcheck missing{{end}}' \
+              "$container_name" 2>/dev/null | redact_stream >&2 || true
+            printf '%s\n' '--- redacted container logs ---' >&2
+            docker logs "$container_name" 2>&1 | redact_stream >&2 || true
+          }
+
+          cleanup() {
+            local test_status=$?
+            local cleanup_failed=0
+            trap - EXIT
+            set +e
+
+            docker rm --force "$container_name" >/dev/null 2>&1 || true
+
+            if [[ -d "$config_dir" ]]; then
+              if ! docker run --rm --network none --user root \
+                --entrypoint /bin/bash \
+                --volume "$config_dir:/config" \
+                codeserver-ci:amd64 \
+                -Eeuo pipefail -c \
+                'find /config -mindepth 1 -delete && chown "$1:$2" /config' \
+                cleanup "$runner_uid" "$runner_gid" >/dev/null; then
+                printf '%s\n' \
+                  'Cleanup warning: failed to empty or restore ownership of the config directory.' \
+                  >&2
+                cleanup_failed=1
+              fi
+            fi
+
+            if ! rm -rf -- "$config_dir" "$secret_file" "$log_file"; then
+              printf '%s\n' 'Cleanup warning: failed to remove temporary test files.' >&2
+              cleanup_failed=1
+            fi
+
+            if (( test_status == 0 && cleanup_failed != 0 )); then
+              test_status=1
+            fi
+            exit "$test_status"
+          }
+          trap cleanup EXIT
+
+          wait_healthy() {
+            local attempt container_state health_status
+            for attempt in $(seq 1 90); do
+              container_state="$(
+                docker inspect --format '{{.State.Status}}' "$container_name" 2>/dev/null || true
+              )"
+              health_status="$(
+                docker inspect \
+                  --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' \
+                  "$container_name" 2>/dev/null || true
+              )"
+
+              case "$container_state" in
+                running) ;;
+                "")
+                  printf '%s\n' 'Runtime test failed: container is missing.' >&2
+                  diagnose_runtime
+                  return 1
+                  ;;
+                *)
+                  printf 'Runtime test failed: container state is %s.\n' "$container_state" >&2
+                  diagnose_runtime
+                  return 1
+                  ;;
+              esac
+
+              case "$health_status" in
+                healthy)
+                  return 0
+                  ;;
+                starting)
+                  sleep 1
+                  ;;
+                unhealthy)
+                  printf '%s\n' 'Runtime test failed: container is unhealthy.' >&2
+                  diagnose_runtime
+                  return 1
+                  ;;
+                missing|"")
+                  printf '%s\n' 'Runtime test failed: Docker healthcheck is missing.' >&2
+                  diagnose_runtime
+                  return 1
+                  ;;
+                *)
+                  printf 'Runtime test failed: unexpected health status %s.\n' \
+                    "$health_status" >&2
+                  diagnose_runtime
+                  return 1
+                  ;;
+              esac
+            done
+
+            printf '%s\n' 'Runtime test failed: healthcheck timeout.' >&2
+            diagnose_runtime
+            return 1
+          }
+
+          verify_listener_uid() {
+            local listener_record listener_uid
+
+            if ! listener_record="$(
+              docker exec --interactive --user root "$container_name" \
+                python3 - 8443 < scripts/ci/resolve-listener-uid.py 2>&1
+            )"; then
+              printf '%s\n' \
+                'Runtime test failed: TCP/8443 listener UID could not be resolved.' \
+                >&2
+              printf '%s\n' "$listener_record" >&2
+              return 1
+            fi
+
+            if [[ ! "$listener_record" =~ ^[0-9]+$ ]]; then
+              printf 'Runtime test failed: unexpected listener resolver output: %q\n' \
+                "$listener_record" >&2
+              return 1
+            fi
+
+            listener_uid="$listener_record"
+
+            [[ "$listener_uid" == "$puid" ]] || {
+              printf 'Runtime test failed: listener UID %s does not equal PUID %s.\n' \
+                "$listener_uid" "$puid" >&2
+              return 1
+            }
+
+            [[ "$listener_uid" != 0 ]] || {
+              printf '%s\n' \
+                'Runtime test failed: listener runs as root.' >&2
+              return 1
+            }
+
+            printf 'TCP/8443 listener UID=%s\n' \
+              "$listener_uid"
+          }
+
+          assert_secret_absent_from_logs() {
+            docker logs "$container_name" >"$log_file" 2>&1
+            python3 - "$secret_file" "$log_file" <<'PYSECRET'
+          from pathlib import Path
+          import sys
+
+          synthetic_hash = Path(sys.argv[1]).read_text(encoding="utf-8").strip()
+          logs = Path(sys.argv[2]).read_text(encoding="utf-8", errors="replace")
+          if not synthetic_hash:
+              raise SystemExit("synthetic secret file is empty")
+          if synthetic_hash in logs:
+              raise SystemExit("synthetic hashed password was exposed in container logs")
+          PYSECRET
+          }
+
+          docker run --rm --entrypoint /bin/bash codeserver-ci:amd64 -c \
+            "printf '%s' synthetic-password | argon2 synthetic-salt -id -t 1 -m 8 -p 1 -l 16 -e" \
+            >"$secret_file"
+          chmod 600 "$secret_file"
+
+          docker run --detach --name "$container_name" --network none \
+            --env PUID="$puid" --env PGID="$pgid" --env TZ=Etc/UTC \
+            --env FILE__HASHED_PASSWORD=/run/secrets/hashed_password \
+            --health-cmd='curl --fail --silent --show-error http://127.0.0.1:8443/healthz >/dev/null || exit 1' \
+            --health-interval=1s \
+            --health-timeout=3s \
+            --health-retries=90 \
+            --health-start-period=2s \
+            --volume "$config_dir:/config" \
+            --volume "$secret_file:/run/secrets/hashed_password:ro" \
+            codeserver-ci:amd64 >/dev/null
+
+          wait_healthy
+          docker exec "$container_name" \
+            curl --fail --silent --show-error http://127.0.0.1:8443/healthz \
+            >/dev/null
+          test "$(docker exec "$container_name" stat -c '%u:%g' /config)" = "$puid:$pgid"
+          docker exec "$container_name" sh -c 'printf marker > /config/restart-marker'
+          test "$(docker exec "$container_name" cat /config/restart-marker)" = marker
+          verify_listener_uid
+          ! docker exec "$container_name" \
+            sh -c 'ps -eo args= | grep -E "(^|/)(dockerd|containerd)( |$)"'
+          ! docker exec "$container_name" test -S /var/run/docker.sock
+          assert_secret_absent_from_logs
+
+          docker restart "$container_name" >/dev/null
+          wait_healthy
+          docker exec "$container_name" \
+            curl --fail --silent --show-error http://127.0.0.1:8443/healthz \
+            >/dev/null
+          test "$(docker exec "$container_name" cat /config/restart-marker)" = marker
+          test "$(docker exec "$container_name" stat -c '%u:%g' /config)" = "$puid:$pgid"
+          verify_listener_uid
+          assert_secret_absent_from_logs
+
+      - name: Prepare Trivy report directory
+        if: always()
+        shell: bash
+        run: mkdir -p "${RUNNER_TEMP}/trivy-reports"
+
+      - name: Trivy filesystem and configuration scan
+        if: ${{ !cancelled() }}
+        id: trivy_filesystem
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          ./scripts/ci/run-trivy-scan.sh --filesystem . --architecture repository --report-dir "${RUNNER_TEMP}/trivy-reports"
+          status=$?
+          printf '%s\n' "$status" >"${RUNNER_TEMP}/trivy-reports/repository.exit"
+          exit "$status"
+
+      - name: Trivy amd64 image scan
+        if: ${{ !cancelled() }}
+        id: trivy_amd64
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          ./scripts/ci/run-trivy-scan.sh --image codeserver-ci:amd64 --architecture amd64 --report-dir "${RUNNER_TEMP}/trivy-reports"
+          status=$?
+          printf '%s\n' "$status" >"${RUNNER_TEMP}/trivy-reports/amd64.exit"
+          exit "$status"
+
+      - name: Trivy arm64 image scan
+        if: ${{ !cancelled() }}
+        id: trivy_arm64
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          ./scripts/ci/run-trivy-scan.sh --image-archive "${RUNNER_TEMP}/codeserver-arm64.tar" --architecture arm64 --report-dir "${RUNNER_TEMP}/trivy-reports"
+          status=$?
+          printf '%s\n' "$status" >"${RUNNER_TEMP}/trivy-reports/arm64.exit"
+          exit "$status"
+
+      - name: Summarize sanitized Trivy reports
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for report in "${RUNNER_TEMP}"/trivy-reports/*-summary.json; do
+            [[ -f "$report" ]] || continue
+            jq -r '"### " + .Architecture + "\n- Vulnerabilities: " + (.VulnerabilityCount|tostring) + " (fix available: " + (.FixAvailable|tostring) + ", no fix: " + (.NoFixAvailable|tostring) + ")\n- Direct tool dependencies: " + (.DirectToolDependency|tostring) + "; inherited base image: " + (.InheritedBaseImage|tostring) + "\n- Severity: CRITICAL=" + (.Critical|tostring) + " HIGH=" + (.High|tostring) + " MEDIUM=" + (.Medium|tostring) + " LOW=" + (.Low|tostring) + " UNKNOWN=" + (.Unknown|tostring) + "\n- Misconfigurations: " + (.MisconfigurationCount|tostring) + "; secrets: " + (.SecretCount|tostring) + " (" + .SecretStatus + ")"' "$report" >>"$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Upload sanitized Trivy reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v7.0.1
+        with:
+          name: trivy-sanitized-reports
+          path: ${{ runner.temp }}/trivy-reports
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Gate all Trivy scans
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          failed=0
+          for report in "${RUNNER_TEMP}"/trivy-reports/{repository,amd64,arm64}.exit; do
+            if [[ ! -f "$report" ]]; then
+              echo "Missing Trivy status: $report" >&2
+              failed=1
+              continue
+            fi
+            status="$(cat "$report")"
+            case "$status" in
+              0) ;;
+              1) echo "Trivy reported HIGH/CRITICAL findings: $report" >&2; failed=1 ;;
+              2) echo "Trivy scan/input error: $report" >&2; failed=1 ;;
+              *) echo "Invalid Trivy exit code in $report: $status" >&2; failed=1 ;;
+            esac
+          done
+          exit "$failed"

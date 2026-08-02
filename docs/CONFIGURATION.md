@@ -13,6 +13,39 @@ vorgesehen.
 - `LOCAL_OPTIONAL`: lokaler Wert mit sicherem Default oder leerem Zustand.
 - `SECRET_PATH`: lokaler Dateipfad; der Pfad ist nicht der Secret-Inhalt.
 
+## Entwicklungsimage und Cache
+
+Die systemweite Toolchain ist kein Compose- oder Secret-Wert. Sie ist im
+Dockerfile exakt gepinnt und wird auf Ubuntu Noble für `amd64` und `arm64`
+gebaut:
+
+- Node.js bleibt `24.18.1`; pnpm ist exakt `11.19.0` und wird als offizielles
+  npm-Paket mit der Registry-Integrity `sha512-eIHz7VkNRyxKlV4riLISF5ERYGbcyIy8o4SeybYPG7qm0syyIfqR2k4cZb7yvL43k2Wup6xTnHv4be3DobItzg==` geprüft.
+- PostgreSQL-Client `18.4-1.pgdg24.04+1` stammt aus PGDG; Docker CLI
+  `5:29.7.0-1~ubuntu.24.04~noble`, Compose `5.3.1-1~ubuntu.24.04~noble` und
+  Buildx `0.36.0-1~ubuntu.24.04~noble` stammen aus Docker. Beide APT-Quellen
+  verwenden dedizierte `signed-by`-Keyrings und verifizierte Fingerprints.
+- Trivy `0.72.0` stammt aus dem offiziellen Aqua-Security-Releasearchiv. Die
+  Checksummenliste und das passende `amd64`-/`arm64`-Archiv werden per
+  SHA-256 geprüft.
+
+LinuxServer startet den s6-Initprozess gemäß Basisimagevertrag und wendet `PUID`/`PGID` während der Initialisierung an. Der code-server-Dienst läuft anschließend mit der festgelegten Nicht-Root-UID. Der Root-Initprozess erhält keinen Docker-Socket, keine zusätzlichen Capabilities und keinen privilegierten Modus; der Dienstzugriff bleibt auf die expliziten Mounts und Containergrenzen beschränkt.
+
+Diese Werkzeuge sind ausschließlich CLIs. Der Container enthält keinen Docker-
+Daemon, keine Docker-Gruppe und keinen Docker-Socket; `docker compose` und
+`docker buildx` benötigen im Container deshalb einen externen, ausdrücklich
+bereitgestellten Builder. Der lokale Standardvertrag prüft den fehlenden
+`/var/run/docker.sock` sowie fehlende `dockerd`-/`containerd`-Befehle als
+Sicherheitsmerkmal.
+
+Trivy verwendet den persistenten Cache `/config/.cache/trivy`. Scanberichte
+und Secrets werden nicht dort abgelegt. Lokale daemonfreie Prüfungen sind
+`./scripts/verify-developer-tools.sh`, `./scripts/verify-toolchain.sh`,
+`./scripts/verify-installation.sh --static` und
+`scripts/ci/run-trivy-scan.sh --help`; reale Multiarch-Builds, Runtime- und
+Image-Scans laufen nur auf GitHub-hosted Runnern. CI blockiert ungeklärte
+`HIGH`- und `CRITICAL`-Befunde; `MEDIUM` und niedriger werden berichtet.
+
 ## Finale Portainer-/Compose-Matrix
 
 | Variable | Klasse | Zweck | Pflicht | Default | Öffentlicher Beispielwert | Sensitivität | Konfigurationsort | Verbraucher | Validierungsregel |
