@@ -502,6 +502,14 @@ Gate, sobald ihr zugehöriger Task erreicht wird.
   `MIG-017`-Taskdatei und der lokale ignorierte `TASK-RESULT.md`.
   `.github/workflows/publish-image.yml`, `compose.yaml`, Portainer-, Secret-,
   Release- und Deploymentverträge bleiben unverändert.
+- **Versionsvertrag:** DEC-011 gibt Node.js innerhalb der Hauptversion `24`
+  und pnpm innerhalb der Hauptversion `11` frei. Die konkreten Versionen
+  bleiben im Dockerfile exakt gepinnt und über Herstellerprüfsummen
+  beziehungsweise npm-Registry-Integrität verifiziert. Sichere Patch- und
+  Minor-Updates benötigen vollständige Quellen-, Integritäts-,
+  Kompatibilitäts- und CI-Prüfung; Hauptversionswechsel benötigen eine neue
+  Eigentümerentscheidung. Floating-Versionen und eine Abschwächung des
+  HIGH-/CRITICAL-Gates bleiben ausgeschlossen.
 - **Quellen- und Integritätsvertrag:** pnpm stammt aus npm und wird über die
   offizielle Registry-Integrity `sha512-eIHz7VkNRyxKlV4riLISF5ERYGbcyIy8o4SeybYPG7qm0syyIfqR2k4cZb7yvL43k2Wup6xTnHv4be3DobItzg==`
   geprüft. PGDG- und Docker-APT-Quellen verwenden dedizierte `signed-by`-
@@ -533,6 +541,9 @@ Gate, sobald ihr zugehöriger Task erreicht wird.
   `BLOCKED`; EXT-014 ist als `COMPLETED` dokumentiert und erlaubt nur die
   befristete Ausnahme `AVD-DS-0002` bis einschließlich `2026-10-31` für den
   LinuxServer-s6-Initvertrag.
+  DEC-011 ist `ACCEPTED` und legt Node.js `24.x` sowie pnpm `11.x`
+  als freigegebene Hauptversionslinien bei weiterhin exakten,
+  integritätsgeprüften Build-Pins fest.
 - **Rollback / Abbruchstrategie:** Bei nicht ausführbarer Prüfung oder einem
   nicht sicher behebbaren `HIGH`-/`CRITICAL`-Befund MIG-017 auf `BLOCKED`
   setzen, Befund und betroffene Schicht dokumentieren und keine Ignore-Regel

@@ -150,3 +150,34 @@ stillschweigend überschrieben.
   überschreiben; eine Bereinigung ist frühestens nach MIG-015 separat zulässig.
 - **Mögliche spätere Neubewertung:** Nach vollständiger Backup-, Restore-,
   Laufzeit- und Rollbackabnahme sowie dokumentierter Betreiberfreigabe.
+
+## DEC-011: Sicherheitsupdates innerhalb freigegebener Hauptversionen
+
+- **Status:** ACCEPTED
+- **Kontext:** MIG-017 benötigt reproduzierbare, exakt verifizierte
+  Werkzeugstände und zugleich die Möglichkeit, Sicherheitskorrekturen ohne
+  wiederholte Freigabe jeder einzelnen Patch- oder Minor-Version einzuspielen.
+  Die bisher in Issue #6 genannten exakten Versionen widersprechen dem bereits
+  umgesetzten und geprüften Stand.
+- **Entscheidung:** Für MIG-017 sind Node.js innerhalb der Hauptversion `24` und
+  pnpm innerhalb der Hauptversion `11` freigegeben. Die jeweils tatsächlich
+  verwendete Version bleibt im Dockerfile exakt gepinnt und wird über
+  Herstellerprüfsummen beziehungsweise npm-Registry-Integrität verifiziert.
+  Sichere Patch- und Minor-Updates innerhalb dieser Hauptversionen sind nach
+  vollständiger Quellen-, Integritäts-, Kompatibilitäts- und CI-Prüfung
+  zulässig. Ein Wechsel der Hauptversion benötigt eine neue
+  Eigentümerentscheidung.
+- **Begründung:** Der Vertrag trennt die fachlich freigegebene
+  Kompatibilitätslinie von dem für reproduzierbare Builds erforderlichen
+  konkreten Pin. Sicherheitsupdates können dadurch bewertet und übernommen
+  werden, ohne Floating-Versionen oder unkontrollierte Aktualisierungen
+  einzuführen.
+- **Konsequenzen:** Versionsbereiche werden nicht dynamisch im Dockerfile
+  aufgelöst. Jeder konkrete Pin, jede Prüfsumme und jeder Integritätswert bleibt
+  reviewpflichtig. Beide Architekturen müssen bauen und die Sicherheitsprüfung
+  darf sich nicht verschlechtern. Diese Entscheidung erlaubt weder
+  CVE-/GHSA-Ausnahmen noch eine Abschwächung des blockierenden
+  HIGH-/CRITICAL-Gates.
+- **Mögliche spätere Neubewertung:** Ein Wechsel auf Node.js `25` oder höher,
+  pnpm `12` oder höher oder ein anderes Versionsmodell benötigt eine neue,
+  ausdrücklich revidierende Entscheidung.
